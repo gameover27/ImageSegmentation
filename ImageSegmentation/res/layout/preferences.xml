@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <yuku.ambilwarna.widget.AmbilWarnaPreference
+        android:defaultValue="@integer/color_green"
+        android:key="pref_color_fg"
+        android:summary="@string/pref_color_summ_fg"
+        android:title="@string/pref_color_fg" />
+
+    <yuku.ambilwarna.widget.AmbilWarnaPreference
+        android:defaultValue="@integer/color_red"
+        android:key="pref_color_bg"
+        android:summary="@string/pref_color_summ_bg"
+        android:title="@string/pref_color_bg" />
+
+    <com.tum.imagesegmentation.SeekBarPreference
+        android:defaultValue="350"
+        android:key="pref_iterations"
+        android:max="3000"
+        android:summary="Number of rounds"
+        android:title="Iterations" />
+
+    <ListPreference
+        android:defaultValue="7"
+        android:entries="@array/scaleentries"
+        android:entryValues="@array/scalevalues"
+        android:key="pref_scale"
+        android:summary="Scales the picture for calculation"
+        android:title="Scale picture" />
+
+</PreferenceScreen>

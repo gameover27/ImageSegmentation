@@ -1,0 +1,9 @@
+INDEX VERSION 1.126+/home/sebastian/IMGSegRepo/ImageSegmentation/.metadata/.plugins/org.eclipse.jdt.core
+1971407313.index
+773911723.index
+3202703014.index
+805526605.index
+1616771452.index
+3091961962.index
+132597343.index
+4049783430.index

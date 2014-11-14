@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Image Segmentation</string>
+    <string name="action_settings">Settings</string>
+    <string name="choose_picture">Choose Picture</string>
+    <string name="button_clicked">Button clicked!</string>
+    <string name="open_picture">Open Picture</string>
+    <string name="draw_mode">Draw Mode</string>
+    <string name="clear_draw">Clear Drawing</string>
+    <string name="pick_color">Pick Color</string>
+    <string name="save_picture">Save Picture</string>
+    <string name="start_segmentation">Start Segmentation</string>
+    <string name="switch_fg_bg">Switch FG/BG</string>
+    <string name="load_scribbles">Load Scribbles</string>
+    <string name="pref_color_fg">Foreground color</string>
+    <string name="pref_color_summ_fg">Choose the foreground color</string>
+    <string name="pref_color_bg">Background color</string>
+    <string name="pref_color_summ_bg">Choose the background color</string>
+
+</resources>

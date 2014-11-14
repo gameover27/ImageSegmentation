@@ -1,0 +1,3 @@
+[submodule "android-gpuimage"]
+	path = android-gpuimage
+	url = https://github.com/CyberAgent/android-gpuimage.git

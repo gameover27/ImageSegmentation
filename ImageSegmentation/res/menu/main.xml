@@ -1,0 +1,50 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="com.tum.imagesegmentation.MainActivity" >
+    
+    <group android:id="@+id/draw_options" android:visible="false">
+        <item
+        	android:id="@+id/action_switch_fore_back"
+        	android:icon="?attr/menuForegroundIcon"
+        	android:title="@string/switch_fg_bg"
+        	app:showAsAction="ifRoom"/>
+        <item
+        	android:id="@+id/action_clear_draw"
+        	android:icon="?attr/menuClearDrawIcon"
+        	android:title="@string/clear_draw"
+        	app:showAsAction="ifRoom"/>
+        <item
+        	android:id="@+id/action_load_scribbles"
+        	android:icon="?attr/menuLoadScribblesIcon"
+        	android:title="@string/load_scribbles"
+        	app:showAsAction="ifRoom"/>
+    </group>
+    <item
+        	android:id="@+id/action_start_segmentation"
+        	android:icon="?attr/menuStartSegmentationIcon"
+        	android:title="@string/start_segmentation"
+        	app:showAsAction="ifRoom"/>
+    <item
+       	android:id="@+id/action_open_pic"
+       	android:icon="?attr/menuPictureIcon"
+       	android:title="@string/open_picture"
+       	app:showAsAction="ifRoom"/>
+    <item
+       	android:id="@+id/action_save_pic"
+       	android:icon="?attr/menuSavePictureIcon"
+       	android:title="@string/save_picture"
+       	app:showAsAction="ifRoom"/>
+    <item
+       	android:id="@+id/action_draw_mode"
+       	android:icon="?attr/menuDrawModeIcon"
+       	android:title="@string/draw_mode"
+       	app:showAsAction="ifRoom"/>
+
+    <!--<item
+        android:id="@+id/action_settings"
+        android:orderInCategory="100"
+        android:title="@string/action_settings"
+        app:showAsAction="never"/> -->
+
+</menu>

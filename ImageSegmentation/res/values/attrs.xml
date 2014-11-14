@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="AppBaseTheme">
+        <attr name="menuClearDrawIcon" format="reference" />
+        <attr name="menuDrawModeIcon" format="reference" />
+        <attr name="menuPictureIcon" format="reference" />
+        <attr name="menuDrawModeIconRed" format="reference" />
+        <attr name="menuPickColorIcon" format="reference" />
+        <attr name="menuStartSegmentationIcon" format="reference" />
+        <attr name="menuForegroundIcon" format="reference" />
+        <attr name="menuBackgroundIcon" format="reference" />
+        <attr name="menuSavePictureIcon" format="reference" />
+        <attr name="menuLoadScribblesIcon" format="reference" />
+    </declare-styleable>
+</resources>

@@ -1,0 +1,21 @@
+<resources>
+
+    <!--
+        Base application theme for API 14+. This theme completely replaces
+        AppBaseTheme from BOTH res/values/styles.xml and
+        res/values-v11/styles.xml on API 14+ devices.
+    -->
+    <style name="AppBaseTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- API 14 theme customizations can go here. -->
+        <item name="menuPictureIcon">@drawable/ic_action_new_picture_dark</item>
+        <item name="menuDrawModeIcon">@drawable/ic_action_edit_dark</item>
+        <item name="menuClearDrawIcon">@drawable/ic_action_remove_dark</item>
+        <item name="menuDrawModeIconRed">@drawable/ic_action_edit_red</item>
+        <item name="menuPickColorIcon">@drawable/ic_action_choose_color</item>
+        <item name="menuStartSegmentationIcon">@drawable/ic_action_accept_dark</item>
+        <item name="menuForegroundIcon">@drawable/ic_action_foreground_dark</item>
+        <item name="menuBackgroundIcon">@drawable/ic_action_background_dark</item>
+        <item name="menuSavePictureIcon">@drawable/ic_action_save_dark</item>
+        <item name="menuLoadScribblesIcon">@drawable/ic_action_sd_storage_dark</item>
+    </style>
+</resources>
