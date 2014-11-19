@@ -12,6 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ * 
+ * Updated by Sebastian Soyer
  */
 
 package com.tum.imagesegmentation;
@@ -22,15 +24,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+
 import jp.co.cyberagent.android.gpuimage.GPUImage;
 import jp.co.cyberagent.android.gpuimage.GPUImageSobelEdgeDetection;
 import android.app.AlertDialog;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.ProgressDialog;
-import android.app.ApplicationErrorReport.AnrInfo;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -40,13 +40,8 @@ import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
-import android.graphics.Paint;
 import android.graphics.Bitmap.Config;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -56,11 +51,13 @@ import android.os.PowerManager.WakeLock;
 import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
 import android.provider.MediaStore;
-import android.support.v8.renderscript.*;
 import android.support.v13.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.ActionBarActivity;
-import android.util.Log;
+import android.support.v8.renderscript.Allocation;
+import android.support.v8.renderscript.Element;
+import android.support.v8.renderscript.RenderScript;
+import android.support.v8.renderscript.Type;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -72,7 +69,7 @@ import android.widget.Toast;
 /**
  * This Class provides the main frame for the ImageSegmentation app
  * 
- * @author Magdalena Neumann
+ * @author Magdalena Neumann. Updated by Sebastian Soyer.
  * 
  */
 public class MainActivity extends ActionBarActivity {
@@ -92,12 +89,6 @@ public class MainActivity extends ActionBarActivity {
 
 	Bitmap image_original;
 	Bitmap image_scaled;
-
-	ByteBuffer pathbitmapfgBuffer = null;
-	ByteBuffer pathbitmapbgBuffer = null;
-	ByteBuffer imageGradientBuffer = null;
-	ByteBuffer imageBuffer = null;
-	ByteBuffer uBuffer = null;
 	
 	RenderScript mRS;
 
@@ -362,6 +353,8 @@ public class MainActivity extends ActionBarActivity {
 			return true;
 		}
 		if (id == R.id.action_start_segmentation) {
+			
+			setUpProgress();
 
 			reloadImage(imageURI, false);
 
@@ -435,14 +428,6 @@ public class MainActivity extends ActionBarActivity {
 	}
 
 	/**
-	 * This method can be called from outside the main class to increment the
-	 * progessdialog by 1.
-	 */
-	public void incrementProgress() {
-		progress.incrementProgressBy(1);
-	}
-
-	/**
 	 * This method handles the process of closing the progress dialog.
 	 */
 	private void dismissProgress() {
@@ -452,103 +437,44 @@ public class MainActivity extends ActionBarActivity {
 
 	/**
 	 * This method acts as a callback function to process the data calculated by
-	 * the segmentation algorithm implemented in C via the NDK
+	 * the segmentation algorithm
 	 * 
-	 * @param buf
-	 *            A processed buffer containing the u-matrix
+	 * @param image
+	 *            The original image to draw the contours on
+	 * @param u
+	 *            Bitmap containing a binary image with foreground and background labels
 	 */
-	private void callbackSegmentation(ByteBuffer buf) {
-		Bitmap u = Bitmap.createBitmap(scaled_width, scaled_height,
-				Bitmap.Config.ALPHA_8);
-
-		imageGradientBuffer = null;
-
-		Bitmap scaledbmp = Bitmap.createScaledBitmap(u,
-				image_original.getWidth(), image_original.getHeight(), true);
-		u.recycle();
-		u = scaledbmp;
-		scaledbmp = null;
-
-		System.gc();
-
-		imageBuffer.flip();
-		uBuffer.flip();
-
-		// Convert back to argb
-		Bitmap rgb_u = Bitmap.createBitmap(u.getWidth(), u.getHeight(),
-				Bitmap.Config.ARGB_8888);
-		rgb_u.eraseColor(Color.BLACK);
-		float[] matrix = new float[] { 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-				1, 0, 0, 0, 0, 1, 0 };
-		Paint convRGB = new Paint();
-		convRGB.setColorFilter(new ColorMatrixColorFilter(new ColorMatrix(
-				matrix)));
-		convRGB.setAlpha(255);
-		Canvas rgbCanv = new Canvas(rgb_u);
-		rgbCanv.setDensity(Bitmap.DENSITY_NONE);
-		rgbCanv.drawBitmap(u, 0, 0, convRGB);
-
-		u.recycle();
-		u = rgb_u;
-		rgb_u = null;
-
-		displayU(u);
-
-		// Draw contours to the original image
-		new DrawContoursThread(
-				imageBuffer,
-				uBuffer,
-				image_original.getHeight(),
-				image_original.getWidth(),
-				Constants.CONTOUR_THRESHOLD,
-				(image_original.getWidth() > (1.0 / Constants.CONTOUR_WIDTH_RATIO)) ? (int) (Constants.CONTOUR_WIDTH_RATIO * image_original
-						.getWidth()) : 1).execute();
-	}
-
-	/**
-	 * This method acts as a callback function to process the data calculated by
-	 * the contour drawing algorithm implemented in C via the NDK
-	 * 
-	 * @param buf
-	 *            A processed buffer containing the original image with drawn
-	 *            contours
-	 */
-	private void callbackDrawContours(ByteBuffer buf) {
-		displayImage(image_original, false);
-
+	private void callbackSegmentation(Bitmap image, Bitmap u) {				
 		long duration = System.currentTimeMillis() - starttime;
 
 		actionBar.findItem(R.id.action_save_pic).setVisible(true);
 		wakeLock.release();
-
+		
 		Toast.makeText(getApplicationContext(),
 				"Calculation took " + (duration / 1000) + " s",
 				Toast.LENGTH_LONG).show();
 
-		AlertDialog alertDialog = new AlertDialog.Builder(this).create();
-		alertDialog.setTitle("Calculation finished");
-		alertDialog.setMessage("Calculation took " + (duration / 1000) + " s");
-
 		new AlertDialog.Builder(this)
-				.setTitle("Calculation finished")
-				.setMessage("Calculation took " + (duration / 1000) + " s")
-				.setPositiveButton(android.R.string.yes,
-						new DialogInterface.OnClickListener() {
-							public void onClick(DialogInterface dialog,
-									int which) {
-								dialog.cancel();
-							}
-						}).show();
-
-		imageBuffer = null;
-		uBuffer = null;
-
+		.setTitle("Calculation finished")
+		.setMessage("Calculation took " + (duration / 1000) + " s")
+		.setPositiveButton(android.R.string.yes,
+				new DialogInterface.OnClickListener() {
+					public void onClick(DialogInterface dialog,
+							int which) {
+						dialog.cancel();
+					}
+				}).show();
+		
+		displayImage(image, false);
+		displayU(u);
+		
+		dismissProgress();
+		
 		System.gc();
 	}
 
 	/**
-	 * This method prepares the buffers needed for segmentation and contour
-	 * drawing via NDK
+	 * This method runs the segmentation algorithm and draws contours using renderscript
 	 * 
 	 * @param bmp
 	 *            Image to be processed
@@ -559,196 +485,31 @@ public class MainActivity extends ActionBarActivity {
 	 */
 	public void scheduleProcessing(Bitmap bmp, Bitmap pathbitmapfg,
 			Bitmap pathbitmapbg) {
+		starttime = System.currentTimeMillis();
+		
 		PowerManager mgr = (PowerManager) getApplicationContext()
 				.getSystemService(Context.POWER_SERVICE);
 		wakeLock = mgr
 				.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyWakeLock");
 		wakeLock.acquire();
-
-		starttime = System.currentTimeMillis();
 		if (bmp.getHeight() == pathbitmapfg.getHeight()
 				&& bmp.getWidth() == pathbitmapbg.getWidth()) {
-			
-			// Alloc buffer for image gradient on native side
 
 			// Run Sobel
 			GPUImage gpuI = new GPUImage(this);
 			gpuI.setImage(bmp); // this loads image on the current thread,
 								// should be run in a thread
 			gpuI.setFilter(new GPUImageSobelEdgeDetection());
+			
 
-			bmp = gpuI.getBitmapWithFilterApplied();
-
-			// convert to alpha
-			Bitmap alpha_bmp = Bitmap.createBitmap(bmp.getWidth(),
-					bmp.getHeight(), Bitmap.Config.ALPHA_8);
-			float[] matrix = new float[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					0, 0, 0, 1, 0, 0, 0, 0 };
-			Paint convAlpha = new Paint();
-			convAlpha.setColorFilter(new ColorMatrixColorFilter(
-					new ColorMatrix(matrix)));
-			Canvas alphaCanv = new Canvas(alpha_bmp);
-			alphaCanv.setDensity(Bitmap.DENSITY_NONE);
-			alphaCanv.drawBitmap(bmp, 0, 0, convAlpha);
-
-			alpha_bmp.recycle();
-
-			// Alloc buffer for user input on native side
+			Bitmap imageGradient = gpuI.getBitmapWithFilterApplied();
 
 			// Process buffers
-			setUpProgress();
 			SharedPreferences sp = PreferenceManager
-					.getDefaultSharedPreferences(getApplicationContext()); /*
-			new SegmentationThread(imageGradientBuffer, pathbitmapfgBuffer,
-					pathbitmapbgBuffer, bmp.getHeight(), bmp.getWidth(),
-					sp.getInt("pref_iterations", 350), Constants.ALPHA,
-					Constants.BETA, Constants.TAU, Constants.THETA).execute(); */
+					.getDefaultSharedPreferences(getApplicationContext()); 
+			int iterations = sp.getInt("pref_iterations", 350);
 			
-	        
-	        //displayU(pathbitmapfg);
-	        
-	        /*
-	         * Read Scribbles
-	         */
-	        Allocation scribbleAlloc = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        Allocation imgGradAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        
-	        //Create u array
-			float[] u = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
-			float[] p_x = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
-			float[] p_y = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
-			
-			Type uType = new Type.Builder(mRS, Element.F32(mRS)).setX(scribbleAlloc.getType().getX()).setY(scribbleAlloc.getType().getY()).create();
-	        Allocation uAllocation = Allocation.createTyped(mRS, uType);
-	        Allocation p_x_alloc = Allocation.createTyped(mRS, uType);
-	        Allocation p_y_alloc = Allocation.createTyped(mRS, uType);
-	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), u);
-	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), p_x);
-	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), p_y);
-	        
-	        //Instantiate readscribble script
-	        ScriptC_projectionToConstraint projectionToConstraint = new ScriptC_projectionToConstraint(mRS);
-	        
-	        //Assingn input and output allocations
-	        projectionToConstraint.set_gIn(scribbleAlloc);
-	        projectionToConstraint.set_gOut(uAllocation);
-	        //readscribbles.bind_gPixels(scribbleAlloc);
-	        projectionToConstraint.set_gScript(projectionToConstraint);
-	        projectionToConstraint.set_foreground(1);
-	        projectionToConstraint.set_initialized(0);
-	        
-	        //Run script for foreground
-	        projectionToConstraint.invoke_filter();
-	        scribbleAlloc.destroy();
-	        	        
-	        //Assign input for background
-	        scribbleAlloc = Allocation.createFromBitmap(mRS, pathbitmapbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        projectionToConstraint.set_gIn(scribbleAlloc);
-	        projectionToConstraint.set_foreground(0);
-	        projectionToConstraint.set_initialized(1);
-	        projectionToConstraint.invoke_filter();
-	        scribbleAlloc.destroy();
-	        
-	        /*
-	         * Perform segmentation
-	         */
-	        //Instantiate segmentationU script	        
-	        ScriptC_segmentationU segU = new ScriptC_segmentationU(mRS);
-	        
-	     	//Instantiate segmentationP script
-	        ScriptC_segmentationP segP = new ScriptC_segmentationP(mRS);
-	        
-	        //Bind allocations U
-	        segU.set_u(uAllocation);
-	        segU.set_p_x(p_x_alloc);
-	        segU.set_p_y(p_y_alloc);
-	        segU.set_theta(Constants.THETA);
-	        segU.set_gScript(segU);
-	        
-	        //Bind allocations P
-	        segP.set_alpha(Constants.ALPHA);
-	        segP.set_beta(Constants.BETA);
-	        segP.set_imgGrad(imgGradAlloc);
-	        segP.set_p_x(p_x_alloc);
-	        segP.set_p_y(p_y_alloc);
-	        segP.set_tau(Constants.TAU);
-	        segP.set_theta(Constants.THETA);
-	        segP.set_u(uAllocation);
-	        segP.set_gScript(segP);
-	        
-	        /*segP.set_u(uAllocation);
-	        segP.set_p_x(p_x_alloc);
-	        segP.set_p_y(p_y_alloc);
-	        segP.set_theta(Constants.THETA);
-	        segP.set_gScript(segU);*/
-	        
-	        //Run calculations
-	        Allocation scribbleAllocBG = Allocation.createFromBitmap(mRS, pathbitmapbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        Allocation scribbleAllocFG = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        projectionToConstraint.set_initialized(1);
-	        for (int i = 0; i < 1000; i++) {
-		        segU.invoke_filter();
-		        segP.invoke_filter();
-		        //Projection to constraint
-		        projectionToConstraint.set_gIn(scribbleAllocBG);
-		        projectionToConstraint.set_foreground(0);
-		        projectionToConstraint.invoke_filter();
-		        projectionToConstraint.set_gIn(scribbleAllocFG);
-		        projectionToConstraint.set_foreground(1);
-		        projectionToConstraint.invoke_filter();
-	        }
-	        
-	        //Copy result from allocation to array
-	        uAllocation.copyTo(u);
-	        
-	        //Clean up
-	        scribbleAllocBG.destroy();
-	        scribbleAllocFG.destroy();
-	        uAllocation.destroy();
-	        imgGradAlloc.destroy();
-	        
-	        
-	        //Check results
-	        /*for (int i = 0; i < u.length; i++) {
-	        	Log.v("AppDebug", "U: " + u[i]);
-	        }*/
-	        for (int i = 0; i < bmp.getWidth(); i++) {
-	        	for (int j = 0; j < bmp.getHeight(); j++) {
-	        		bmp.setPixel(i, j, Color.rgb((int)(u[j * bmp.getWidth() + i] * 255), 0, 0));
-	        	}
-	        }
-	     	        
-	        displayU(bmp);
-	        
-	        /*Allocation mInAllocation = Allocation.createFromBitmap(mRS, bmp,Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        Allocation mOutAllocation = Allocation.createTyped(mRS, mInAllocation.getType());
-			
-			for (int i = 0; i < mInAllocation.getType().getX(); i++) {
-				for (int j = 0; j < mInAllocation.getType().getY(); j++) {
-					u[i*mInAllocation.getType().getY() +  j] = (float)i / mInAllocation.getType().getX();//(float)((i+1) / (j+1));
-				}
-			}
-
-	        //Allocation uAllocation = Allocation.createTyped(mRS, mInAllocation.getType());
-	        mOutAllocation.copyFrom(bmp);
-	        mOutAllocation.copyTo(filteredBitmap);
-	        //uAllocation.copyTo(uBitmap);
-
-	        ScriptC_segmentationU segmentationscript = new ScriptC_segmentationU(mRS);
-	        segmentationscript.set_brightnessValue(4.0f);
-	        segmentationscript.set_u(uAllocation);
-	        segmentationscript.bind_gPixels(mInAllocation);
-
-	        segmentationscript.set_gIn(mInAllocation);
-	        segmentationscript.set_gOut(mOutAllocation);
-	        segmentationscript.set_gScript(segmentationscript);
-	        segmentationscript.invoke_filter();
-	        mOutAllocation.copyTo(filteredBitmap);
-	        //uAllocation.copyTo(uBitmap);
-	        
-	        displayU(filteredBitmap);*/
-	        
-	        dismissProgress();
+			new SegmentationThread(bmp, imageGradient, pathbitmapfg, pathbitmapbg, iterations).execute();
 		}
 	}
 
@@ -1197,8 +958,8 @@ public class MainActivity extends ActionBarActivity {
 			BitmapFactory.decodeStream(inStream, null, options);
 
 			// Save image scaling status
-			// Divide available memory by 48 to leave space fore all
-			// bytebuffers that are used to process the image later
+			// Divide available memory by 48 (12 Bitmaps with 4 Byte per pixel each) to leave space fore all
+			// Bitmaps that are used to process the image later
 			// This value leaves some free space for varialbes etc.
 
 			long maxNumPixels = (Runtime.getRuntime().maxMemory()
@@ -1392,8 +1153,6 @@ public class MainActivity extends ActionBarActivity {
 	 * @return Bitmap containing the desired scribbles
 	 */
 	private Bitmap getScribbleFGBG(boolean fg) {
-		//Bitmap fgbg = Bitmap.createBitmap(scaled_width, scaled_height,
-		//		Config.ALPHA_8);
 		Bitmap fgbg = Bitmap.createBitmap(scaled_width, scaled_height,
 				Config.ARGB_8888);
 		Bitmap scribbleBmp = readScribbleBitmap();
@@ -1442,33 +1201,24 @@ public class MainActivity extends ActionBarActivity {
 	 * @author Magdalena Neumann. Updated By Sebastian Soyer.
 	 * 
 	 */
-	public class SegmentationThread extends AsyncTask<Void, Void, ByteBuffer> {
+	public class SegmentationThread extends AsyncTask<Void, Void, Bitmap> {
 
-		ByteBuffer imageGradientBuffer;
-		ByteBuffer pathbitmapfgBuffer;
-		ByteBuffer pathbitmapbgBuffer;
+		Bitmap imageGradient;
+		Bitmap pathbitmapfg;
+		Bitmap pathbitmapbg;
+		Bitmap bmp;
+		Bitmap scaledMonochrome;
 		int height;
 		int width;
 		int iterations;
-		double alpha;
-		double beta;
-		double tau;
-		double theta;
 
-		public SegmentationThread(ByteBuffer imageGradientBuffer,
-				ByteBuffer pathbitmapfgBuffer, ByteBuffer pathbitmapbgBuffer,
-				int height, int width, int iterations, double alpha,
-				double beta, double tau, double theta) {
-			this.imageGradientBuffer = imageGradientBuffer;
-			this.pathbitmapfgBuffer = pathbitmapfgBuffer;
-			this.pathbitmapbgBuffer = pathbitmapbgBuffer;
-			this.height = height;
-			this.width = width;
+		public SegmentationThread(Bitmap bmp, Bitmap imageGradient,
+				Bitmap pathbitmapfg, Bitmap pathbitmapbg, int iterations) {
+			this.imageGradient = imageGradient;
+			this.pathbitmapfg = pathbitmapfg;
+			this.pathbitmapbg = pathbitmapbg;
+			this.bmp = bmp;
 			this.iterations = iterations;
-			this.alpha = alpha;
-			this.beta = beta;
-			this.tau = tau;
-			this.theta = theta;
 
 		}
 
@@ -1476,15 +1226,172 @@ public class MainActivity extends ActionBarActivity {
 		 * {@inheritDoc}
 		 */
 		@Override
-		protected ByteBuffer doInBackground(Void... arg0) {
+		protected Bitmap doInBackground(Void... arg0) {
 			// Temporarily disable screen rotation
 			if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
 				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 			} else
 				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-
-			return imageGradientBuffer;
-			// return pathbitmapfgBuffer;
+			
+			/*
+	         * Read Scribbles
+	         */
+	        Allocation scribbleAlloc = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        Allocation imgGradAlloc = Allocation.createFromBitmap(mRS, imageGradient, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        
+	        //Create u array
+			float[] u = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
+			float[] p_x = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
+			float[] p_y = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
+			
+			Type uType = new Type.Builder(mRS, Element.F32(mRS)).setX(scribbleAlloc.getType().getX()).setY(scribbleAlloc.getType().getY()).create();
+	        Allocation uAllocation = Allocation.createTyped(mRS, uType);
+	        Allocation p_x_alloc = Allocation.createTyped(mRS, uType);
+	        Allocation p_y_alloc = Allocation.createTyped(mRS, uType);
+	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), u);
+	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), p_x);
+	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), p_y);
+	        
+	        //Instantiate readscribble script
+	        ScriptC_projectionToConstraint projectionToConstraint = new ScriptC_projectionToConstraint(mRS);
+	        
+	        //Assingn input and output allocations
+	        projectionToConstraint.set_gIn(scribbleAlloc);
+	        projectionToConstraint.set_gOut(uAllocation);
+	        //readscribbles.bind_gPixels(scribbleAlloc);
+	        projectionToConstraint.set_gScript(projectionToConstraint);
+	        projectionToConstraint.set_foreground(1);
+	        projectionToConstraint.set_initialized(0);
+	        
+	        //Run script for foreground
+	        projectionToConstraint.invoke_filter();
+	        scribbleAlloc.destroy();
+	        	        
+	        //Assign input for background
+	        scribbleAlloc = Allocation.createFromBitmap(mRS, pathbitmapbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        projectionToConstraint.set_gIn(scribbleAlloc);
+	        projectionToConstraint.set_foreground(0);
+	        projectionToConstraint.set_initialized(1);
+	        projectionToConstraint.invoke_filter();
+	        scribbleAlloc.destroy();
+	        
+	        /*
+	         * Perform segmentation
+	         */
+	        //Instantiate segmentationU script	        
+	        ScriptC_segmentationU segU = new ScriptC_segmentationU(mRS);
+	        
+	     	//Instantiate segmentationP script
+	        ScriptC_segmentationP segP = new ScriptC_segmentationP(mRS);
+	        
+	        //Bind allocations U
+	        segU.set_u(uAllocation);
+	        segU.set_p_x(p_x_alloc);
+	        segU.set_p_y(p_y_alloc);
+	        segU.set_theta(Constants.THETA);
+	        segU.set_gScript(segU);
+	        
+	        //Bind allocations P
+	        segP.set_alpha(Constants.ALPHA);
+	        segP.set_beta(Constants.BETA);
+	        segP.set_imgGrad(imgGradAlloc);
+	        segP.set_p_x(p_x_alloc);
+	        segP.set_p_y(p_y_alloc);
+	        segP.set_tau(Constants.TAU);
+	        segP.set_theta(Constants.THETA);
+	        segP.set_u(uAllocation);
+	        segP.set_gScript(segP);
+	        
+	        //Run calculations
+	        Allocation scribbleAllocBG = Allocation.createFromBitmap(mRS, pathbitmapbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        Allocation scribbleAllocFG = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        projectionToConstraint.set_initialized(1);
+	        for (int i = 0; i < iterations; i++) {
+		        segU.invoke_filter();
+		        segP.invoke_filter();
+		        //Projection to constraint
+		        projectionToConstraint.set_gIn(scribbleAllocBG);
+		        projectionToConstraint.set_foreground(0);
+		        projectionToConstraint.invoke_filter();
+		        projectionToConstraint.set_gIn(scribbleAllocFG);
+		        projectionToConstraint.set_foreground(1);
+		        projectionToConstraint.invoke_filter();
+		        
+		        publishProgress();
+	        }
+	        
+	        //Free p_x_alloc and p_y_alloc
+	        p_x_alloc.destroy();
+	        p_y_alloc.destroy();
+	        
+	        //Copy result from allocation to array
+	        uAllocation.copyTo(u);
+	        
+	        //Free unused resources
+	        scribbleAllocBG.destroy();
+	        scribbleAllocFG.destroy();
+	        imgGradAlloc.destroy();
+	        
+	        imageGradient.recycle();
+	        imageGradient = null;
+	        
+	        //Create u picture
+	        Bitmap uImage = Bitmap.createBitmap(bmp.getWidth(), bmp.getHeight(), Bitmap.Config.ARGB_8888);
+	        Allocation createUImageAlloc = Allocation.createFromBitmap(mRS, uImage, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        ScriptC_createUImage createuimage = new ScriptC_createUImage(mRS);
+	        createuimage.set_gIn(uAllocation);
+	        createuimage.set_gOut(createUImageAlloc);
+	        createuimage.set_gScript(createuimage);
+	        createuimage.invoke_filter();
+	        createUImageAlloc.copyTo(uImage);
+	        
+	        //Clean up uImage allocation
+	        createUImageAlloc.destroy();
+	        
+	        //Free U allocation
+	        uAllocation.destroy();
+	        
+	        //Create scaled monochrome image
+	        if (scaledMonochrome != null && !scaledMonochrome.isRecycled()) {
+	        	scaledMonochrome.recycle();
+	        }
+	        scaledMonochrome = Bitmap.createScaledBitmap(uImage,
+					image_original.getWidth(), image_original.getHeight(), true);
+	        
+	        //Free memory used for uImage
+	        uImage.recycle();
+	        
+	        Allocation scaledMonochromeAlloc = Allocation.createFromBitmap(mRS, scaledMonochrome, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        ScriptC_createMonochrome createmonochrome = new ScriptC_createMonochrome(mRS);
+	        createmonochrome.set_gIn(scaledMonochromeAlloc);
+	        createmonochrome.set_threshold(Constants.CONTOUR_THRESHOLD);
+	        createmonochrome.set_gScript(createmonochrome);
+	        createmonochrome.invoke_filter();
+	        scaledMonochromeAlloc.copyTo(scaledMonochrome);
+	        
+	        //Clean up scaledMonochrome Allocation
+	        scaledMonochromeAlloc.destroy();
+	        
+	        //Draw contours
+	        Allocation image_originalAlloc = Allocation.createFromBitmap(mRS, image_original, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        Allocation scaledbmpAlloc = Allocation.createFromBitmap(mRS, scaledMonochrome, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        ScriptC_drawContours drawcontours = new ScriptC_drawContours(mRS);
+	        drawcontours.set_contourWidth((int)(Constants.CONTOUR_WIDTH_RATIO * image_original.getWidth()));
+	        drawcontours.set_image(image_originalAlloc);
+	        drawcontours.set_u(scaledbmpAlloc);
+	        drawcontours.set_gScript(drawcontours);
+	        drawcontours.invoke_filter();
+	        
+	        //incrementProgress();
+	        
+	        image_originalAlloc.copyTo(image_original);
+	        
+	        //Clean bmp Allocation
+	        image_originalAlloc.destroy();
+	        
+	        
+			
+			return image_original;
 		}
 
 		/**
@@ -1493,65 +1400,16 @@ public class MainActivity extends ActionBarActivity {
 		 * @param returnBuffer
 		 *            Buffer returned by the segmentation thread
 		 */
-		protected void onPostExecute(ByteBuffer returnBuffer) {
-			callbackSegmentation(returnBuffer);
-
-			// imageGradientBuffer is closed in DrawContours thread
-			pathbitmapbgBuffer = null;
-			pathbitmapfgBuffer = null;
-			MainActivity.this.pathbitmapbgBuffer = null;
-			MainActivity.this.pathbitmapfgBuffer = null;
+		protected void onPostExecute(Bitmap result) {
+			callbackSegmentation(result, scaledMonochrome);
 
 			// Enable screen rotation
 			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
 		}
-	}
-
-	/**
-	 * This class models a thread to draw the calculated contours on the original
-	 * bitmaps
-	 * 
-	 * @author Magdalena Neumann
-	 * 
-	 */
-	public class DrawContoursThread extends AsyncTask<Void, Void, ByteBuffer> {
-
-		ByteBuffer imageBuffer;
-		ByteBuffer u_ref;
-		int height;
-		int width;
-		double contourThreshold;
-		int contourWidth;
-
-		public DrawContoursThread(ByteBuffer imageBuffer, ByteBuffer u_ref,
-				int height, int width, double contourThreshold, int contourWidth) {
-			this.imageBuffer = imageBuffer;
-			this.u_ref = u_ref;
-			this.height = height;
-			this.width = width;
-			this.contourThreshold = contourThreshold;
-			this.contourWidth = contourWidth;
-		}
-
-		/**
-		 * {@inheritDoc}
-		 */
+		
 		@Override
-		protected ByteBuffer doInBackground(Void... arg0) {
-			return null;
-		}
-
-		/**
-		 * This method is executed after the thread has finished execution
-		 * 
-		 * @param returnBuffer
-		 *            Buffer returned by the draw contour thread
-		 */
-		protected void onPostExecute(ByteBuffer returnBuffer) {
-			callbackDrawContours(returnBuffer);
-
-			dismissProgress();
-		}
-
+	    protected void onProgressUpdate(Void... values) {
+	        progress.incrementProgressBy(1);
+	    }
 	}
 }

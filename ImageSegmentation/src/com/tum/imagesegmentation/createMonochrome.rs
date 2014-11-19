@@ -13,40 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
 #pragma version(1)
 #pragma rs java_package_name(com.tum.imagesegmentation)
 
 #include "rs_debug.rsh" 
 
-float brightnessValue;
-
 rs_allocation gIn;
-rs_allocation gOut;
 rs_script gScript;
 
-int foreground = 0;
-int initialized = 0;
+float threshold = 0.5;
 
-void root(const uchar4 *v_in, float *v_out, const void *usrData, uint32_t x, uint32_t y) {
+void root(const uchar4 *v_in, uchar4 *v_out, const void *usrData, uint32_t x, uint32_t y) {
 
-    float4 apixel = rsUnpackColor8888(*v_in);
-    float3 pixel = apixel.rgb;
+    float4 pixel = rsUnpackColor8888(*v_in);
     
-    if (pixel.r != 0.0) {
-    	//rsSetElementAt_float(u, 0.5, x, y);
-    	if (foreground > 0) {
-    		*v_out = 1.0;
-    	} else {
-    		*v_out = 0.0;
-    	}
-    } else if (initialized == 0) {
-    	*v_out = 0.5;
+    if (pixel.r >= threshold) {
+    	v_out->a = 255;
+    	v_out->r = 255;
+    	v_out->g = 255;
+    	v_out->b = 255;
+    } else {
+    	v_out->a = 255;
+    	v_out->r = 0;
+    	v_out->g = 0;
+    	v_out->b = 0;
     }
     
 }
 
 
 void filter() {
-    rsForEach(gScript, gIn, gOut, 0, 0);
+    rsForEach(gScript, gIn, gIn, 0, 0);
 }
