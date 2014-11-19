@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<session version="1.0">
-<refactoring comment="Delete 5 resources" deleteContents="false" description="Delete 5 resources" element1="/AmbilWarna" element2="/appcompat_v7" element3="/gpuimage" element4="/gpuimage-sample" element5="/ImageSegmentation" flags="7" id="org.eclipse.ltk.core.refactoring.delete.resources" resources="5" stamp="1415967221394"/>
-</session>

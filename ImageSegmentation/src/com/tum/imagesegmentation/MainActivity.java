@@ -24,13 +24,13 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-
 import jp.co.cyberagent.android.gpuimage.GPUImage;
 import jp.co.cyberagent.android.gpuimage.GPUImageSobelEdgeDetection;
 import android.app.AlertDialog;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.ProgressDialog;
+import android.app.ApplicationErrorReport.AnrInfo;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -56,6 +56,7 @@ import android.os.PowerManager.WakeLock;
 import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
 import android.provider.MediaStore;
+import android.support.v8.renderscript.*;
 import android.support.v13.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.ActionBarActivity;
@@ -81,8 +82,6 @@ public class MainActivity extends ActionBarActivity {
 	private boolean fgbg_save = true;
 	public boolean scaled;
 	private ProgressDialog progress;
-	private int original_width;
-	private int original_height;
 	private int scaled_width;
 	private int scaled_height;
 	Uri imageURI = null;
@@ -99,6 +98,8 @@ public class MainActivity extends ActionBarActivity {
 	ByteBuffer imageGradientBuffer = null;
 	ByteBuffer imageBuffer = null;
 	ByteBuffer uBuffer = null;
+	
+	RenderScript mRS;
 
 	/**
 	 * {@inheritDoc}
@@ -231,6 +232,11 @@ public class MainActivity extends ActionBarActivity {
 		vPager.setCurrentItem(1);
 		// keep two offscreen pages in memory
 		vPager.setOffscreenPageLimit(2);
+		
+        /*
+         * Renderscript init		
+         */
+        mRS = RenderScript.create(this);
 
 	}
 
@@ -455,9 +461,6 @@ public class MainActivity extends ActionBarActivity {
 		Bitmap u = Bitmap.createBitmap(scaled_width, scaled_height,
 				Bitmap.Config.ALPHA_8);
 
-		u.copyPixelsFromBuffer(imageGradientBuffer);
-
-		freeNative(imageGradientBuffer);
 		imageGradientBuffer = null;
 
 		Bitmap scaledbmp = Bitmap.createScaledBitmap(u,
@@ -466,15 +469,6 @@ public class MainActivity extends ActionBarActivity {
 		u = scaledbmp;
 		scaledbmp = null;
 
-		imageBuffer = allocNative(
-				image_original.getHeight() * image_original.getWidth() * 4)
-				.order(ByteOrder.nativeOrder());
-
-		uBuffer = allocNative(u.getHeight() * u.getWidth()).order(
-				ByteOrder.nativeOrder());
-
-		image_original.copyPixelsToBuffer(imageBuffer);
-		u.copyPixelsToBuffer(uBuffer);
 		System.gc();
 
 		imageBuffer.flip();
@@ -520,7 +514,6 @@ public class MainActivity extends ActionBarActivity {
 	 *            contours
 	 */
 	private void callbackDrawContours(ByteBuffer buf) {
-		image_original.copyPixelsFromBuffer(buf);
 		displayImage(image_original, false);
 
 		long duration = System.currentTimeMillis() - starttime;
@@ -547,8 +540,6 @@ public class MainActivity extends ActionBarActivity {
 							}
 						}).show();
 
-		freeNative(imageBuffer);
-		freeNative(uBuffer);
 		imageBuffer = null;
 		uBuffer = null;
 
@@ -579,8 +570,6 @@ public class MainActivity extends ActionBarActivity {
 				&& bmp.getWidth() == pathbitmapbg.getWidth()) {
 			
 			// Alloc buffer for image gradient on native side
-			imageGradientBuffer = allocNative(bmp.getHeight() * bmp.getWidth())
-					.order(ByteOrder.nativeOrder());
 
 			// Run Sobel
 			GPUImage gpuI = new GPUImage(this);
@@ -602,31 +591,164 @@ public class MainActivity extends ActionBarActivity {
 			alphaCanv.setDensity(Bitmap.DENSITY_NONE);
 			alphaCanv.drawBitmap(bmp, 0, 0, convAlpha);
 
-			alpha_bmp.copyPixelsToBuffer(imageGradientBuffer);
 			alpha_bmp.recycle();
-			imageGradientBuffer.flip();
 
 			// Alloc buffer for user input on native side
-			pathbitmapfgBuffer = allocNative(
-					pathbitmapfg.getHeight() * pathbitmapfg.getWidth()).order(
-					ByteOrder.nativeOrder());
-			pathbitmapfg.copyPixelsToBuffer(pathbitmapfgBuffer);
-			pathbitmapfgBuffer.flip();
-
-			pathbitmapbgBuffer = allocNative(
-					pathbitmapbg.getHeight() * pathbitmapbg.getWidth()).order(
-					ByteOrder.nativeOrder());
-			pathbitmapbg.copyPixelsToBuffer(pathbitmapbgBuffer);
-			pathbitmapbgBuffer.flip();
 
 			// Process buffers
 			setUpProgress();
 			SharedPreferences sp = PreferenceManager
-					.getDefaultSharedPreferences(getApplicationContext());
+					.getDefaultSharedPreferences(getApplicationContext()); /*
 			new SegmentationThread(imageGradientBuffer, pathbitmapfgBuffer,
 					pathbitmapbgBuffer, bmp.getHeight(), bmp.getWidth(),
 					sp.getInt("pref_iterations", 350), Constants.ALPHA,
-					Constants.BETA, Constants.TAU, Constants.THETA).execute();
+					Constants.BETA, Constants.TAU, Constants.THETA).execute(); */
+			
+	        
+	        //displayU(pathbitmapfg);
+	        
+	        /*
+	         * Read Scribbles
+	         */
+	        Allocation scribbleAlloc = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        Allocation imgGradAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        
+	        //Create u array
+			float[] u = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
+			float[] p_x = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
+			float[] p_y = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
+			
+			Type uType = new Type.Builder(mRS, Element.F32(mRS)).setX(scribbleAlloc.getType().getX()).setY(scribbleAlloc.getType().getY()).create();
+	        Allocation uAllocation = Allocation.createTyped(mRS, uType);
+	        Allocation p_x_alloc = Allocation.createTyped(mRS, uType);
+	        Allocation p_y_alloc = Allocation.createTyped(mRS, uType);
+	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), u);
+	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), p_x);
+	        uAllocation.copy2DRangeFrom(0, 0, scribbleAlloc.getType().getX(), scribbleAlloc.getType().getY(), p_y);
+	        
+	        //Instantiate readscribble script
+	        ScriptC_projectionToConstraint projectionToConstraint = new ScriptC_projectionToConstraint(mRS);
+	        
+	        //Assingn input and output allocations
+	        projectionToConstraint.set_gIn(scribbleAlloc);
+	        projectionToConstraint.set_gOut(uAllocation);
+	        //readscribbles.bind_gPixels(scribbleAlloc);
+	        projectionToConstraint.set_gScript(projectionToConstraint);
+	        projectionToConstraint.set_foreground(1);
+	        projectionToConstraint.set_initialized(0);
+	        
+	        //Run script for foreground
+	        projectionToConstraint.invoke_filter();
+	        scribbleAlloc.destroy();
+	        	        
+	        //Assign input for background
+	        scribbleAlloc = Allocation.createFromBitmap(mRS, pathbitmapbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        projectionToConstraint.set_gIn(scribbleAlloc);
+	        projectionToConstraint.set_foreground(0);
+	        projectionToConstraint.set_initialized(1);
+	        projectionToConstraint.invoke_filter();
+	        scribbleAlloc.destroy();
+	        
+	        /*
+	         * Perform segmentation
+	         */
+	        //Instantiate segmentationU script	        
+	        ScriptC_segmentationU segU = new ScriptC_segmentationU(mRS);
+	        
+	     	//Instantiate segmentationP script
+	        ScriptC_segmentationP segP = new ScriptC_segmentationP(mRS);
+	        
+	        //Bind allocations U
+	        segU.set_u(uAllocation);
+	        segU.set_p_x(p_x_alloc);
+	        segU.set_p_y(p_y_alloc);
+	        segU.set_theta(Constants.THETA);
+	        segU.set_gScript(segU);
+	        
+	        //Bind allocations P
+	        segP.set_alpha(Constants.ALPHA);
+	        segP.set_beta(Constants.BETA);
+	        segP.set_imgGrad(imgGradAlloc);
+	        segP.set_p_x(p_x_alloc);
+	        segP.set_p_y(p_y_alloc);
+	        segP.set_tau(Constants.TAU);
+	        segP.set_theta(Constants.THETA);
+	        segP.set_u(uAllocation);
+	        segP.set_gScript(segP);
+	        
+	        /*segP.set_u(uAllocation);
+	        segP.set_p_x(p_x_alloc);
+	        segP.set_p_y(p_y_alloc);
+	        segP.set_theta(Constants.THETA);
+	        segP.set_gScript(segU);*/
+	        
+	        //Run calculations
+	        Allocation scribbleAllocBG = Allocation.createFromBitmap(mRS, pathbitmapbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        Allocation scribbleAllocFG = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        projectionToConstraint.set_initialized(1);
+	        for (int i = 0; i < 1000; i++) {
+		        segU.invoke_filter();
+		        segP.invoke_filter();
+		        //Projection to constraint
+		        projectionToConstraint.set_gIn(scribbleAllocBG);
+		        projectionToConstraint.set_foreground(0);
+		        projectionToConstraint.invoke_filter();
+		        projectionToConstraint.set_gIn(scribbleAllocFG);
+		        projectionToConstraint.set_foreground(1);
+		        projectionToConstraint.invoke_filter();
+	        }
+	        
+	        //Copy result from allocation to array
+	        uAllocation.copyTo(u);
+	        
+	        //Clean up
+	        scribbleAllocBG.destroy();
+	        scribbleAllocFG.destroy();
+	        uAllocation.destroy();
+	        imgGradAlloc.destroy();
+	        
+	        
+	        //Check results
+	        /*for (int i = 0; i < u.length; i++) {
+	        	Log.v("AppDebug", "U: " + u[i]);
+	        }*/
+	        for (int i = 0; i < bmp.getWidth(); i++) {
+	        	for (int j = 0; j < bmp.getHeight(); j++) {
+	        		bmp.setPixel(i, j, Color.rgb((int)(u[j * bmp.getWidth() + i] * 255), 0, 0));
+	        	}
+	        }
+	     	        
+	        displayU(bmp);
+	        
+	        /*Allocation mInAllocation = Allocation.createFromBitmap(mRS, bmp,Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        Allocation mOutAllocation = Allocation.createTyped(mRS, mInAllocation.getType());
+			
+			for (int i = 0; i < mInAllocation.getType().getX(); i++) {
+				for (int j = 0; j < mInAllocation.getType().getY(); j++) {
+					u[i*mInAllocation.getType().getY() +  j] = (float)i / mInAllocation.getType().getX();//(float)((i+1) / (j+1));
+				}
+			}
+
+	        //Allocation uAllocation = Allocation.createTyped(mRS, mInAllocation.getType());
+	        mOutAllocation.copyFrom(bmp);
+	        mOutAllocation.copyTo(filteredBitmap);
+	        //uAllocation.copyTo(uBitmap);
+
+	        ScriptC_segmentationU segmentationscript = new ScriptC_segmentationU(mRS);
+	        segmentationscript.set_brightnessValue(4.0f);
+	        segmentationscript.set_u(uAllocation);
+	        segmentationscript.bind_gPixels(mInAllocation);
+
+	        segmentationscript.set_gIn(mInAllocation);
+	        segmentationscript.set_gOut(mOutAllocation);
+	        segmentationscript.set_gScript(segmentationscript);
+	        segmentationscript.invoke_filter();
+	        mOutAllocation.copyTo(filteredBitmap);
+	        //uAllocation.copyTo(uBitmap);
+	        
+	        displayU(filteredBitmap);*/
+	        
+	        dismissProgress();
 		}
 	}
 
@@ -651,19 +773,7 @@ public class MainActivity extends ActionBarActivity {
 					.getDrawable()).getBitmap();
 
 			// Project to monochrome image
-			ByteBuffer rgb_binary_buffer = allocNative(
-					rgb_binary.getHeight() * rgb_binary.getWidth() * 4).order(
-					ByteOrder.nativeOrder());
 
-			rgb_binary.copyPixelsToBuffer(rgb_binary_buffer);
-			rgb_binary_buffer.flip();
-
-			createMonochrome(rgb_binary_buffer, rgb_binary.getHeight(),
-					rgb_binary.getWidth(), Constants.CONTOUR_THRESHOLD);
-
-			rgb_binary.copyPixelsFromBuffer(rgb_binary_buffer);
-
-			freeNative(rgb_binary_buffer);
 
 			String outPath_contour = getPathWithoutFilename(imageURI)
 					+ File.separator + getFilename(imageURI, false)
@@ -1103,9 +1213,7 @@ public class MainActivity extends ActionBarActivity {
 			} else {
 				scaled = false;
 			}
-
-			original_height = options.outHeight;
-			original_width = options.outWidth;
+			
 			scaled_height = options.outHeight;
 			scaled_width = options.outWidth;
 
@@ -1284,35 +1392,46 @@ public class MainActivity extends ActionBarActivity {
 	 * @return Bitmap containing the desired scribbles
 	 */
 	private Bitmap getScribbleFGBG(boolean fg) {
+		//Bitmap fgbg = Bitmap.createBitmap(scaled_width, scaled_height,
+		//		Config.ALPHA_8);
 		Bitmap fgbg = Bitmap.createBitmap(scaled_width, scaled_height,
-				Config.ALPHA_8);
+				Config.ARGB_8888);
 		Bitmap scribbleBmp = readScribbleBitmap();
-		ByteBuffer fgbgBuffer = allocNative(scaled_height * scaled_width);
-		ByteBuffer scribbleBuffer = allocNative(scaled_height * scaled_width
-				* 4);
 
-		fgbg.copyPixelsToBuffer(fgbgBuffer);
-		scribbleBmp.copyPixelsToBuffer(scribbleBuffer);
+		//Read scribbles
+		ScriptC_createFGBG createfgbg = new ScriptC_createFGBG(mRS);
+		
+		//Create allocations
+		Allocation fgbgAlloc = Allocation.createFromBitmap(mRS, fgbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+		Allocation scribbleBmpAlloc = Allocation.createFromBitmap(mRS, scribbleBmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
 
-		fgbgBuffer.flip();
-		scribbleBuffer.flip();
+		//Bind allocations
+		createfgbg.set_gIn(scribbleBmpAlloc);
+		createfgbg.set_gOut(fgbgAlloc);
+		createfgbg.set_gScript(createfgbg);
 
 		if (fg) {
-			readScribbleJNI(scribbleBuffer, fgbgBuffer, scaled_height,
-					scaled_width, Constants.SCRIBBLE_RED_FG,
-					Constants.SCRIBBLE_GREEN_FG, Constants.SCRIBBLE_BLUE_FG);
+			//Bind foreground colors
+			createfgbg.set_blueValue(Constants.SCRIBBLE_BLUE_FG);
+			createfgbg.set_greenValue(Constants.SCRIBBLE_GREEN_FG);
+			createfgbg.set_redValue(Constants.SCRIBBLE_RED_FG);			
 		} else {
-			readScribbleJNI(scribbleBuffer, fgbgBuffer, scaled_height,
-					scaled_width, Constants.SCRIBBLE_RED_BG,
-					Constants.SCRIBBLE_GREEN_BG, Constants.SCRIBBLE_BLUE_BG);
+			//Bind background colors
+			createfgbg.set_blueValue(Constants.SCRIBBLE_BLUE_BG);
+			createfgbg.set_greenValue(Constants.SCRIBBLE_GREEN_BG);
+			createfgbg.set_redValue(Constants.SCRIBBLE_RED_BG);
 		}
-
-		fgbg.copyPixelsFromBuffer(fgbgBuffer);
-
-		freeNative(fgbgBuffer);
-		freeNative(scribbleBuffer);
-
+		
+		//Run calculation
+		createfgbg.invoke_filter();
+		
+		//Read data from allocation
+		fgbgAlloc.copyTo(fgbg);
+		
+		//Clean up		
 		scribbleBmp.recycle();
+		fgbgAlloc.destroy();
+		scribbleBmpAlloc.destroy();
 
 		return fgbg;
 	}
@@ -1320,7 +1439,7 @@ public class MainActivity extends ActionBarActivity {
 	/**
 	 * This class models a thread for executing the segmentation algorithm
 	 * 
-	 * @author Magdalena Neumann
+	 * @author Magdalena Neumann. Updated By Sebastian Soyer.
 	 * 
 	 */
 	public class SegmentationThread extends AsyncTask<Void, Void, ByteBuffer> {
@@ -1364,10 +1483,6 @@ public class MainActivity extends ActionBarActivity {
 			} else
 				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
-			performSegmentationJNI(imageGradientBuffer, pathbitmapfgBuffer,
-					pathbitmapbgBuffer, height, width, iterations, alpha, beta,
-					tau, theta, Constants.CONTOUR_THRESHOLD);
-
 			return imageGradientBuffer;
 			// return pathbitmapfgBuffer;
 		}
@@ -1382,8 +1497,6 @@ public class MainActivity extends ActionBarActivity {
 			callbackSegmentation(returnBuffer);
 
 			// imageGradientBuffer is closed in DrawContours thread
-			freeNative(MainActivity.this.pathbitmapbgBuffer);
-			freeNative(MainActivity.this.pathbitmapfgBuffer);
 			pathbitmapbgBuffer = null;
 			pathbitmapfgBuffer = null;
 			MainActivity.this.pathbitmapbgBuffer = null;
@@ -1425,9 +1538,7 @@ public class MainActivity extends ActionBarActivity {
 		 */
 		@Override
 		protected ByteBuffer doInBackground(Void... arg0) {
-			drawContoursJNI(imageBuffer, u_ref, height, width,
-					contourThreshold, contourWidth);
-			return imageBuffer;
+			return null;
 		}
 
 		/**
@@ -1443,90 +1554,4 @@ public class MainActivity extends ActionBarActivity {
 		}
 
 	}
-
-	/**
-	 * This is a native method to perform the segmentation algorithm
-	 * 
-	 * @param bmpBuffer
-	 * @param pathbitmapfgBuffer
-	 * @param pathbitmapbgBuffer
-	 * @param height
-	 * @param width
-	 * @param iterations
-	 * @param alpha
-	 * @param beta
-	 * @param tau
-	 * @param theta
-	 * @param countourThreshold
-	 */
-	public native void performSegmentationJNI(ByteBuffer bmpBuffer,
-			ByteBuffer pathbitmapfgBuffer, ByteBuffer pathbitmapbgBuffer,
-			int height, int width, int iterations, double alpha, double beta,
-			double tau, double theta, double countourThreshold);
-
-	/**
-	 * This is a native method to draw contours on the original image
-	 * 
-	 * @param imageBuffer
-	 * @param u_ref
-	 * @param height
-	 * @param width
-	 * @param contourThreshold
-	 * @param contourWidth
-	 */
-	public native void drawContoursJNI(ByteBuffer imageBuffer,
-			ByteBuffer u_ref, int height, int width, double contourThreshold,
-			int contourWidth);
-
-	/**
-	 * This method allocates memory on the dalvik heap
-	 * 
-	 * @param size
-	 *            Number of Bytes to be allocated
-	 * @return A ByteBuffer reference to the allocated memory
-	 */
-	public native ByteBuffer allocNative(long size);
-
-	/**
-	 * his method frees memory on the dalvik heap
-	 * 
-	 * @param bufferAddr
-	 *            Address of the memory segment to be freed
-	 */
-	public native void freeNative(ByteBuffer bufferAddr);
-
-	/**
-	 * This is a native method to read either foreground or background scribbles
-	 * from a bitmap
-	 * 
-	 * @param scribbleBuffer
-	 * @param fgbgBuffer
-	 * @param height
-	 * @param width
-	 * @param redValue
-	 * @param greenValue
-	 * @param blueValue
-	 */
-	public native void readScribbleJNI(ByteBuffer scribbleBuffer,
-			ByteBuffer fgbgBuffer, int height, int width, int redValue,
-			int greenValue, int blueValue);
-
-	/**
-	 * This method creates a binary image to a given grayscale image
-	 * 
-	 * @param imageBuffer
-	 * @param height
-	 * @param width
-	 * @param contourThreshold
-	 */
-	public native void createMonochrome(ByteBuffer imageBuffer, int height,
-			int width, double contourThreshold);
-
-	/*
-	 * Load the ndk library
-	 */
-	static {
-		System.loadLibrary("segmentation-jni");
-	}
-
 }

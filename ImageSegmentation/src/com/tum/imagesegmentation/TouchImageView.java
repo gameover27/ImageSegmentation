@@ -1594,15 +1594,18 @@ public class TouchImageView extends ImageView {
 				&& ((BitmapDrawable) getDrawable()).getBitmap() != null) {
 			Bitmap origbmp = ((BitmapDrawable) getDrawable()).getBitmap();
 
+			/*Bitmap bmp = Bitmap.createBitmap(origbmp.getWidth(),
+					origbmp.getHeight(), Config.ALPHA_8);*/
+			
 			Bitmap bmp = Bitmap.createBitmap(origbmp.getWidth(),
-					origbmp.getHeight(), Config.ALPHA_8);
+					origbmp.getHeight(), Config.ARGB_8888);
 
 			bmp.eraseColor(Color.argb(0, 0, 0, 0));
 			Canvas canvas = new Canvas(bmp);
 			Paint paint = new Paint();
 			paint.setAntiAlias(true);
 			paint.setDither(true);
-			// paint.setColor(Color.rgb(42, 42, 42));
+			paint.setColor(Color.rgb(42, 42, 42));
 			paint.setStyle(Paint.Style.STROKE);
 			paint.setStrokeJoin(Paint.Join.ROUND);
 			paint.setStrokeCap(Paint.Cap.ROUND);
@@ -1638,8 +1641,10 @@ public class TouchImageView extends ImageView {
 			 * origbmp.getHeight(), Config.ALPHA_8);
 			 */
 
-			Bitmap bmp = Bitmap.createBitmap(width, height, Config.ALPHA_8);
+			//Bitmap bmp = Bitmap.createBitmap(width, height, Config.ALPHA_8);
 
+			Bitmap bmp = Bitmap.createBitmap(width, height, Config.ARGB_8888);
+			
 			float ratio = (float) width / (float) (origbmp.getWidth());
 
 			bmp.eraseColor(Color.argb(0, 0, 0, 0));
@@ -1647,6 +1652,7 @@ public class TouchImageView extends ImageView {
 			Paint paint = new Paint();
 			paint.setAntiAlias(true);
 			paint.setDither(true);
+			paint.setColor(Color.rgb(42, 42, 42));
 			paint.setStyle(Paint.Style.STROKE);
 			paint.setStrokeJoin(Paint.Join.ROUND);
 			paint.setStrokeCap(Paint.Cap.ROUND);
