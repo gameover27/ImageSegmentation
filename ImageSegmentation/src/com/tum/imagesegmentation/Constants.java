@@ -27,7 +27,7 @@ public final class Constants {
 	public static final float BETA = 1.0f;
 	public static final float TAU = 0.16f;
 	public static final float THETA = 0.5f;
-	public static final double CONTOUR_THRESHOLD = 0.7;
+	public static final float CONTOUR_THRESHOLD = 0.7f;
 	public static final double CONTOUR_WIDTH_RATIO = 0.01;
 	public static final int SCRIBBLE_RED_FG = 0;
 	public static final int SCRIBBLE_RED_BG = 255;

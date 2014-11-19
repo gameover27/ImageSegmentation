@@ -10,9 +10,6 @@ rs_script gScript;
 
 float theta;
 
-//static int mImageWidth;
-//const uchar4 *gPixels;
-
 void root(const float *v_in, float *v_out, const void *usrData, uint32_t x, uint32_t y) {
 
 	float deriv_x = rsGetElementAt_float(p_x, x, y);

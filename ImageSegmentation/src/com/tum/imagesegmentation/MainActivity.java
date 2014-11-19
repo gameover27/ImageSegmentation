@@ -576,11 +576,12 @@ public class MainActivity extends ActionBarActivity {
 			gpuI.setImage(bmp); // this loads image on the current thread,
 								// should be run in a thread
 			gpuI.setFilter(new GPUImageSobelEdgeDetection());
+			
 
-			bmp = gpuI.getBitmapWithFilterApplied();
+			Bitmap imageGradient = gpuI.getBitmapWithFilterApplied();
 
 			// convert to alpha
-			Bitmap alpha_bmp = Bitmap.createBitmap(bmp.getWidth(),
+			/*Bitmap alpha_bmp = Bitmap.createBitmap(bmp.getWidth(),
 					bmp.getHeight(), Bitmap.Config.ALPHA_8);
 			float[] matrix = new float[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 					0, 0, 0, 1, 0, 0, 0, 0 };
@@ -591,14 +592,16 @@ public class MainActivity extends ActionBarActivity {
 			alphaCanv.setDensity(Bitmap.DENSITY_NONE);
 			alphaCanv.drawBitmap(bmp, 0, 0, convAlpha);
 
-			alpha_bmp.recycle();
+			alpha_bmp.recycle();*/
 
 			// Alloc buffer for user input on native side
 
 			// Process buffers
 			setUpProgress();
 			SharedPreferences sp = PreferenceManager
-					.getDefaultSharedPreferences(getApplicationContext()); /*
+					.getDefaultSharedPreferences(getApplicationContext()); 
+			int iterations = sp.getInt("pref_iterations", 350);
+			/*
 			new SegmentationThread(imageGradientBuffer, pathbitmapfgBuffer,
 					pathbitmapbgBuffer, bmp.getHeight(), bmp.getWidth(),
 					sp.getInt("pref_iterations", 350), Constants.ALPHA,
@@ -611,7 +614,7 @@ public class MainActivity extends ActionBarActivity {
 	         * Read Scribbles
 	         */
 	        Allocation scribbleAlloc = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        Allocation imgGradAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        Allocation imgGradAlloc = Allocation.createFromBitmap(mRS, imageGradient, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
 	        
 	        //Create u array
 			float[] u = new float[scribbleAlloc.getType().getX() * scribbleAlloc.getType().getY()];
@@ -686,7 +689,7 @@ public class MainActivity extends ActionBarActivity {
 	        Allocation scribbleAllocBG = Allocation.createFromBitmap(mRS, pathbitmapbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
 	        Allocation scribbleAllocFG = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
 	        projectionToConstraint.set_initialized(1);
-	        for (int i = 0; i < 1000; i++) {
+	        for (int i = 0; i < iterations; i++) {
 		        segU.invoke_filter();
 		        segP.invoke_filter();
 		        //Projection to constraint
@@ -701,52 +704,58 @@ public class MainActivity extends ActionBarActivity {
 	        //Copy result from allocation to array
 	        uAllocation.copyTo(u);
 	        
-	        //Clean up
+	        //Free unused resources
 	        scribbleAllocBG.destroy();
 	        scribbleAllocFG.destroy();
-	        uAllocation.destroy();
 	        imgGradAlloc.destroy();
 	        
+	        imageGradient.recycle();
+	        imageGradient = null;
+	        
+	        //Create monochrome picture
+	        Bitmap monochrome = Bitmap.createBitmap(bmp.getWidth(), bmp.getHeight(), Bitmap.Config.ARGB_8888);
+	        Allocation monochromeAlloc = Allocation.createFromBitmap(mRS, monochrome, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        ScriptC_createMonochrome createmonochrome = new ScriptC_createMonochrome(mRS);
+	        createmonochrome.set_gIn(uAllocation);
+	        createmonochrome.set_gOut(monochromeAlloc);
+	        createmonochrome.set_threshold(Constants.CONTOUR_THRESHOLD);
+	        createmonochrome.set_gScript(createmonochrome);
+	        createmonochrome.invoke_filter();
+	        monochromeAlloc.copyTo(monochrome);
+	        
+	        //Clean up monochrome allocation
+	        monochromeAlloc.destroy();
 	        
 	        //Check results
 	        /*for (int i = 0; i < u.length; i++) {
 	        	Log.v("AppDebug", "U: " + u[i]);
 	        }*/
-	        for (int i = 0; i < bmp.getWidth(); i++) {
+	        /*for (int i = 0; i < bmp.getWidth(); i++) {
 	        	for (int j = 0; j < bmp.getHeight(); j++) {
 	        		bmp.setPixel(i, j, Color.rgb((int)(u[j * bmp.getWidth() + i] * 255), 0, 0));
 	        	}
-	        }
-	     	        
+	        }*/
+	        
+	        //Draw contours
+	        Allocation bmpAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        ScriptC_drawContours drawcontours = new ScriptC_drawContours(mRS);
+	        drawcontours.set_contourWidth((int)(Constants.CONTOUR_WIDTH_RATIO * bmp.getWidth()));
+	        drawcontours.set_threshold(Constants.CONTOUR_THRESHOLD);
+	        drawcontours.set_image(bmpAlloc);
+	        drawcontours.set_u(uAllocation);
+	        drawcontours.set_gScript(drawcontours);
+	        drawcontours.invoke_filter();
+	        
+	        bmpAlloc.copyTo(bmp);
+	        
+	        //Clean bmp Allocation
+	        bmpAlloc.destroy();
+	     	  
+	        //displayU(monochrome);
 	        displayU(bmp);
 	        
-	        /*Allocation mInAllocation = Allocation.createFromBitmap(mRS, bmp,Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        Allocation mOutAllocation = Allocation.createTyped(mRS, mInAllocation.getType());
-			
-			for (int i = 0; i < mInAllocation.getType().getX(); i++) {
-				for (int j = 0; j < mInAllocation.getType().getY(); j++) {
-					u[i*mInAllocation.getType().getY() +  j] = (float)i / mInAllocation.getType().getX();//(float)((i+1) / (j+1));
-				}
-			}
-
-	        //Allocation uAllocation = Allocation.createTyped(mRS, mInAllocation.getType());
-	        mOutAllocation.copyFrom(bmp);
-	        mOutAllocation.copyTo(filteredBitmap);
-	        //uAllocation.copyTo(uBitmap);
-
-	        ScriptC_segmentationU segmentationscript = new ScriptC_segmentationU(mRS);
-	        segmentationscript.set_brightnessValue(4.0f);
-	        segmentationscript.set_u(uAllocation);
-	        segmentationscript.bind_gPixels(mInAllocation);
-
-	        segmentationscript.set_gIn(mInAllocation);
-	        segmentationscript.set_gOut(mOutAllocation);
-	        segmentationscript.set_gScript(segmentationscript);
-	        segmentationscript.invoke_filter();
-	        mOutAllocation.copyTo(filteredBitmap);
-	        //uAllocation.copyTo(uBitmap);
-	        
-	        displayU(filteredBitmap);*/
+	        //Free U allocation
+	        uAllocation.destroy();
 	        
 	        dismissProgress();
 		}
