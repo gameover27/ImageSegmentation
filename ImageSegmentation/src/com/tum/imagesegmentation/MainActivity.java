@@ -1321,6 +1321,10 @@ public class MainActivity extends ActionBarActivity {
 		        publishProgress();
 	        }
 	        
+	        //Free p_x_alloc and p_y_alloc
+	        p_x_alloc.destroy();
+	        p_y_alloc.destroy();
+	        
 	        //Copy result from allocation to array
 	        uAllocation.copyTo(u);
 	        
@@ -1349,6 +1353,9 @@ public class MainActivity extends ActionBarActivity {
 	        uAllocation.destroy();
 	        
 	        //Create scaled monochrome image
+	        if (scaledMonochrome != null && !scaledMonochrome.isRecycled()) {
+	        	scaledMonochrome.recycle();
+	        }
 	        scaledMonochrome = Bitmap.createScaledBitmap(uImage,
 					image_original.getWidth(), image_original.getHeight(), true);
 	        
