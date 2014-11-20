@@ -426,14 +426,6 @@ public class MainActivity extends ActionBarActivity {
 	}
 
 	/**
-	 * This method can be called from outside the main class to increment the
-	 * progessdialog by 1.
-	 */
-	public void incrementProgress() {
-		progress.incrementProgressBy(1);
-	}
-
-	/**
 	 * This method handles the process of closing the progress dialog.
 	 */
 	private void dismissProgress() {
@@ -443,61 +435,14 @@ public class MainActivity extends ActionBarActivity {
 
 	/**
 	 * This method acts as a callback function to process the data calculated by
-	 * the segmentation algorithm implemented in C via the NDK
+	 * the segmentation algorithm
 	 * 
-	 * @param buf
-	 *            A processed buffer containing the u-matrix
+	 * @param image
+	 *            The original image to draw the contours on
+	 * @param u
+	 *            Bitmap containing a binary image with foreground and background labels
 	 */
-	private void callbackSegmentation(Bitmap image, Bitmap u) {
-		/*Bitmap u = Bitmap.createBitmap(scaled_width, scaled_height,
-				Bitmap.Config.ALPHA_8);
-
-		imageGradientBuffer = null;
-
-		Bitmap scaledbmp = Bitmap.createScaledBitmap(u,
-				image_original.getWidth(), image_original.getHeight(), true);
-		u.recycle();
-		u = scaledbmp;
-		scaledbmp = null;
-
-		System.gc();
-
-		imageBuffer.flip();
-		uBuffer.flip();
-
-		// Convert back to argb
-		Bitmap rgb_u = Bitmap.createBitmap(u.getWidth(), u.getHeight(),
-				Bitmap.Config.ARGB_8888);
-		rgb_u.eraseColor(Color.BLACK);
-		float[] matrix = new float[] { 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-				1, 0, 0, 0, 0, 1, 0 };
-		Paint convRGB = new Paint();
-		convRGB.setColorFilter(new ColorMatrixColorFilter(new ColorMatrix(
-				matrix)));
-		convRGB.setAlpha(255);
-		Canvas rgbCanv = new Canvas(rgb_u);
-		rgbCanv.setDensity(Bitmap.DENSITY_NONE);
-		rgbCanv.drawBitmap(u, 0, 0, convRGB);
-
-		u.recycle();
-		u = rgb_u;
-		rgb_u = null;
-
-		displayU(u);
-
-		// Draw contours to the original image
-		new DrawContoursThread(
-				imageBuffer,
-				uBuffer,
-				image_original.getHeight(),
-				image_original.getWidth(),
-				Constants.CONTOUR_THRESHOLD,
-				(image_original.getWidth() > (1.0 / Constants.CONTOUR_WIDTH_RATIO)) ? (int) (Constants.CONTOUR_WIDTH_RATIO * image_original
-						.getWidth()) : 1).execute();
-		*/
-		
-		dismissProgress();
-		
+	private void callbackSegmentation(Bitmap image, Bitmap u) {				
 		long duration = System.currentTimeMillis() - starttime;
 
 		actionBar.findItem(R.id.action_save_pic).setVisible(true);
@@ -518,15 +463,16 @@ public class MainActivity extends ActionBarActivity {
 					}
 				}).show();
 		
-		displayImage(image_original, false);
+		displayImage(image, false);
 		displayU(u);
+		
+		dismissProgress();
 		
 		System.gc();
 	}
 
 	/**
-	 * This method prepares the buffers needed for segmentation and contour
-	 * drawing via NDK
+	 * This method runs the segmentation algorithm and draws contours using renderscript
 	 * 
 	 * @param bmp
 	 *            Image to be processed
@@ -1013,8 +959,8 @@ public class MainActivity extends ActionBarActivity {
 			BitmapFactory.decodeStream(inStream, null, options);
 
 			// Save image scaling status
-			// Divide available memory by 48 to leave space fore all
-			// bytebuffers that are used to process the image later
+			// Divide available memory by 48 (12 Bitmaps with 4 Byte per pixel each) to leave space fore all
+			// Bitmaps that are used to process the image later
 			// This value leaves some free space for varialbes etc.
 
 			long maxNumPixels = (Runtime.getRuntime().maxMemory()
@@ -1208,8 +1154,6 @@ public class MainActivity extends ActionBarActivity {
 	 * @return Bitmap containing the desired scribbles
 	 */
 	private Bitmap getScribbleFGBG(boolean fg) {
-		//Bitmap fgbg = Bitmap.createBitmap(scaled_width, scaled_height,
-		//		Config.ALPHA_8);
 		Bitmap fgbg = Bitmap.createBitmap(scaled_width, scaled_height,
 				Config.ARGB_8888);
 		Bitmap scribbleBmp = readScribbleBitmap();
@@ -1359,12 +1303,6 @@ public class MainActivity extends ActionBarActivity {
 	        segP.set_u(uAllocation);
 	        segP.set_gScript(segP);
 	        
-	        /*segP.set_u(uAllocation);
-	        segP.set_p_x(p_x_alloc);
-	        segP.set_p_y(p_y_alloc);
-	        segP.set_theta(Constants.THETA);
-	        segP.set_gScript(segU);*/
-	        
 	        //Run calculations
 	        Allocation scribbleAllocBG = Allocation.createFromBitmap(mRS, pathbitmapbg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
 	        Allocation scribbleAllocFG = Allocation.createFromBitmap(mRS, pathbitmapfg, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
@@ -1380,7 +1318,7 @@ public class MainActivity extends ActionBarActivity {
 		        projectionToConstraint.set_foreground(1);
 		        projectionToConstraint.invoke_filter();
 		        
-		        incrementProgress();
+		        publishProgress();
 	        }
 	        
 	        //Copy result from allocation to array
@@ -1438,12 +1376,14 @@ public class MainActivity extends ActionBarActivity {
 	        drawcontours.set_gScript(drawcontours);
 	        drawcontours.invoke_filter();
 	        
-	        incrementProgress();
+	        //incrementProgress();
 	        
 	        image_originalAlloc.copyTo(image_original);
 	        
 	        //Clean bmp Allocation
 	        image_originalAlloc.destroy();
+	        
+	        
 			
 			return image_original;
 		}
@@ -1460,5 +1400,10 @@ public class MainActivity extends ActionBarActivity {
 			// Enable screen rotation
 			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
 		}
+		
+		@Override
+	    protected void onProgressUpdate(Void... values) {
+	        progress.incrementProgressBy(1);
+	    }
 	}
 }
