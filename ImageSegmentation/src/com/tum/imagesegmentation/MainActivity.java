@@ -353,6 +353,8 @@ public class MainActivity extends ActionBarActivity {
 			return true;
 		}
 		if (id == R.id.action_start_segmentation) {
+			
+			setUpProgress();
 
 			reloadImage(imageURI, false);
 
@@ -483,17 +485,15 @@ public class MainActivity extends ActionBarActivity {
 	 */
 	public void scheduleProcessing(Bitmap bmp, Bitmap pathbitmapfg,
 			Bitmap pathbitmapbg) {
+		starttime = System.currentTimeMillis();
+		
 		PowerManager mgr = (PowerManager) getApplicationContext()
 				.getSystemService(Context.POWER_SERVICE);
 		wakeLock = mgr
 				.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyWakeLock");
 		wakeLock.acquire();
-
-		starttime = System.currentTimeMillis();
 		if (bmp.getHeight() == pathbitmapfg.getHeight()
 				&& bmp.getWidth() == pathbitmapbg.getWidth()) {
-			
-			// Alloc buffer for image gradient on native side
 
 			// Run Sobel
 			GPUImage gpuI = new GPUImage(this);
@@ -505,7 +505,6 @@ public class MainActivity extends ActionBarActivity {
 			Bitmap imageGradient = gpuI.getBitmapWithFilterApplied();
 
 			// Process buffers
-			setUpProgress();
 			SharedPreferences sp = PreferenceManager
 					.getDefaultSharedPreferences(getApplicationContext()); 
 			int iterations = sp.getInt("pref_iterations", 350);
