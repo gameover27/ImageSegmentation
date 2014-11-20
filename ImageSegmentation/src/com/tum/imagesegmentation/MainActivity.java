@@ -1264,7 +1264,7 @@ public class MainActivity extends ActionBarActivity {
 		Bitmap pathbitmapfg;
 		Bitmap pathbitmapbg;
 		Bitmap bmp;
-		Bitmap monochrome;
+		Bitmap scaledMonochrome;
 		int height;
 		int width;
 		int iterations;
@@ -1394,32 +1394,45 @@ public class MainActivity extends ActionBarActivity {
 	        imageGradient.recycle();
 	        imageGradient = null;
 	        
-	        //Create monochrome picture
-	        monochrome = Bitmap.createBitmap(bmp.getWidth(), bmp.getHeight(), Bitmap.Config.ARGB_8888);
-	        Allocation monochromeAlloc = Allocation.createFromBitmap(mRS, monochrome, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        ScriptC_createMonochrome createmonochrome = new ScriptC_createMonochrome(mRS);
-	        createmonochrome.set_gIn(uAllocation);
-	        createmonochrome.set_gOut(monochromeAlloc);
-	        createmonochrome.set_threshold(Constants.CONTOUR_THRESHOLD);
-	        createmonochrome.set_gScript(createmonochrome);
-	        createmonochrome.invoke_filter();
-	        monochromeAlloc.copyTo(monochrome);
+	        //Create u picture
+	        Bitmap uImage = Bitmap.createBitmap(bmp.getWidth(), bmp.getHeight(), Bitmap.Config.ARGB_8888);
+	        Allocation createUImageAlloc = Allocation.createFromBitmap(mRS, uImage, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        ScriptC_createUImage createuimage = new ScriptC_createUImage(mRS);
+	        createuimage.set_gIn(uAllocation);
+	        createuimage.set_gOut(createUImageAlloc);
+	        createuimage.set_gScript(createuimage);
+	        createuimage.invoke_filter();
+	        createUImageAlloc.copyTo(uImage);
 	        
-	        //Clean up monochrome allocation
-	        monochromeAlloc.destroy();
+	        //Clean up uImage allocation
+	        createUImageAlloc.destroy();
 	        
 	        //Free U allocation
 	        uAllocation.destroy();
 	        
-	        Bitmap scaledbmp = Bitmap.createScaledBitmap(monochrome,
+	        //Create scaled monochrome image
+	        scaledMonochrome = Bitmap.createScaledBitmap(uImage,
 					image_original.getWidth(), image_original.getHeight(), true);
+	        
+	        //Free memory used for uImage
+	        uImage.recycle();
+	        
+	        Allocation scaledMonochromeAlloc = Allocation.createFromBitmap(mRS, scaledMonochrome, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        ScriptC_createMonochrome createmonochrome = new ScriptC_createMonochrome(mRS);
+	        createmonochrome.set_gIn(scaledMonochromeAlloc);
+	        createmonochrome.set_threshold(Constants.CONTOUR_THRESHOLD);
+	        createmonochrome.set_gScript(createmonochrome);
+	        createmonochrome.invoke_filter();
+	        scaledMonochromeAlloc.copyTo(scaledMonochrome);
+	        
+	        //Clean up scaledMonochrome Allocation
+	        scaledMonochromeAlloc.destroy();
 	        
 	        //Draw contours
 	        Allocation image_originalAlloc = Allocation.createFromBitmap(mRS, image_original, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-	        Allocation scaledbmpAlloc = Allocation.createFromBitmap(mRS, scaledbmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+	        Allocation scaledbmpAlloc = Allocation.createFromBitmap(mRS, scaledMonochrome, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
 	        ScriptC_drawContours drawcontours = new ScriptC_drawContours(mRS);
 	        drawcontours.set_contourWidth((int)(Constants.CONTOUR_WIDTH_RATIO * image_original.getWidth()));
-	        drawcontours.set_threshold(Constants.CONTOUR_THRESHOLD);
 	        drawcontours.set_image(image_originalAlloc);
 	        drawcontours.set_u(scaledbmpAlloc);
 	        drawcontours.set_gScript(drawcontours);
@@ -1442,9 +1455,7 @@ public class MainActivity extends ActionBarActivity {
 		 *            Buffer returned by the segmentation thread
 		 */
 		protected void onPostExecute(Bitmap result) {
-			callbackSegmentation(result, monochrome);
-
-			// imageGradientBuffer is closed in DrawContours thread
+			callbackSegmentation(result, scaledMonochrome);
 
 			// Enable screen rotation
 			setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);

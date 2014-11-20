@@ -4,17 +4,15 @@
 #include "rs_debug.rsh" 
 
 rs_allocation gIn;
-rs_allocation gOut;
 rs_script gScript;
 
 float threshold = 0.5;
 
-void root(const float *v_in, uchar4 *v_out, const void *usrData, uint32_t x, uint32_t y) {
+void root(const uchar4 *v_in, uchar4 *v_out, const void *usrData, uint32_t x, uint32_t y) {
 
-    //float4 apixel = rsUnpackColor8888(*v_in);
-    //float3 pixel = apixel.rgb;
+    float4 pixel = rsUnpackColor8888(*v_in);
     
-    if (*v_in >= threshold) {
+    if (pixel.r >= threshold) {
     	v_out->a = 255;
     	v_out->r = 255;
     	v_out->g = 255;
@@ -30,5 +28,5 @@ void root(const float *v_in, uchar4 *v_out, const void *usrData, uint32_t x, uin
 
 
 void filter() {
-    rsForEach(gScript, gIn, gOut, 0, 0);
+    rsForEach(gScript, gIn, gIn, 0, 0);
 }

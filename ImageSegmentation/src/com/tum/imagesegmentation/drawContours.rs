@@ -6,8 +6,6 @@
 rs_allocation u;
 rs_allocation image;
 rs_script gScript;
-
-float threshold = 0.5;
 int contourWidth = 1;
 
 static int height;
@@ -34,12 +32,12 @@ void root(const uchar4 *v_in, uchar4 *v_out, const void *usrData, uint32_t x, ui
     float4 pixel8 = rsUnpackColor8888(rsGetElementAt_uchar4(u, x+1, y));
     float4 pixel9 = rsUnpackColor8888(rsGetElementAt_uchar4(u, x+1, y+1));
     
-    if (rsUnpackColor8888(*v_in).r >= threshold && fmin(fmin(fmin(fmin(fmin(fmin(fmin(fmin(
+    if (rsUnpackColor8888(*v_in).r == 1.0 && fmin(fmin(fmin(fmin(fmin(fmin(fmin(fmin(
     		pixel1.r, pixel2.r), 
     		pixel3.r), pixel4.r), 
     		pixel5.r), pixel6.r), 
     		pixel7.r), pixel8.r), 
-    		(rsGetElementAt_uchar4(u, x+1, y)).r) < threshold) {
+    		(rsGetElementAt_uchar4(u, x+1, y)).r) == 0.0) {
     	if (contourWidth > 1) {
     		for(int y_paint = 0; y_paint < contourWidth && (y - ((int)(contourWidth / 2.0)) + y_paint) < height; y_paint++) {
     			for(int x_paint = 0; x_paint < contourWidth && (x - ((int)(contourWidth / 2.0)) + x_paint) < width; x_paint++) {
