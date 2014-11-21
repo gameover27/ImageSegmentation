@@ -23,7 +23,7 @@ public final class Constants {
 	public static final int MAXPATH = 2;
 	public static final int NUMBER_SAMPLES = 2000;
 	public static final int NUMBER_SPLIT_LINES = 200;
-	public static final float ALPHA =3.0f;
+	public static final float ALPHA = 3.0f;
 	public static final float BETA = 1.0f;
 	public static final float TAU = 0.16f;
 	public static final float THETA = 0.5f;
@@ -35,6 +35,12 @@ public final class Constants {
 	public static final int SCRIBBLE_GREEN_BG = 0;
 	public static final int SCRIBBLE_BLUE_FG = 255;
 	public static final int SCRIBBLE_BLUE_BG = 0;
+	public static final float[] sobelKernelX = { -1.f, 0.f, 1.f, -2.f, 0.f,
+			2.f, -1.f, 0.f, 1.f };
+	public static final float[] sobelKernelY = { 1.f, 2.f, 1.f, 0.f, 0.f, 0.f,
+			-1.f, -2.f, -1.f };
+	public static int sobelKernelWidth = 3;
+	public static int sobelKernelHeight = 3;
 
 	private Constants() {
 		throw new AssertionError();

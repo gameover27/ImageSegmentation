@@ -371,7 +371,8 @@ public class MainActivity extends ActionBarActivity {
 			}
 
 			if (pathbitmapfg != null && pathbitmapbg != null) {
-				scheduleProcessing(image_scaled, pathbitmapfg, pathbitmapbg);
+				//scheduleProcessing(image_scaled, pathbitmapfg, pathbitmapbg);
+				testFunction(image_scaled);
 			}
 		}
 
@@ -406,6 +407,55 @@ public class MainActivity extends ActionBarActivity {
 		}
 
 		return super.onOptionsItemSelected(item);
+	}
+	
+	public void testFunction(Bitmap bmp) {
+		ScriptC_createGrayscale creategrayscale= new ScriptC_createGrayscale(mRS);
+		Allocation bmpAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+		Allocation grayscaleAlloc = Allocation.createTyped(mRS, bmpAlloc.getType());
+		creategrayscale.set_gIn(bmpAlloc);
+		creategrayscale.set_gOut(grayscaleAlloc);
+		creategrayscale.set_gScript(creategrayscale);
+		creategrayscale.invoke_filter();
+		
+		bmpAlloc.destroy();
+		
+
+		Allocation sobelXAlloc = Allocation.createTyped(mRS, bmpAlloc.getType());
+		Allocation sobelYAlloc = Allocation.createTyped(mRS, bmpAlloc.getType());
+		
+		Type kernelType = new Type.Builder(mRS, Element.F32(mRS)).setX(Constants.sobelKernelWidth).setY(Constants.sobelKernelHeight).create();
+		Allocation kernelAlloc = Allocation.createTyped(mRS, kernelType);
+        kernelAlloc.copy2DRangeFrom(0, 0, kernelType.getX(), kernelType.getY(), Constants.sobelKernelX);
+		
+        ScriptC_filterImage filterimage = new ScriptC_filterImage(mRS);
+        filterimage.set_filterMatrix(kernelAlloc);
+        filterimage.set_gIn(grayscaleAlloc);
+        filterimage.set_gOut(sobelXAlloc);
+        filterimage.set_gScript(filterimage);
+        filterimage.invoke_filter();
+        
+        kernelAlloc.copy2DRangeFrom(0, 0, kernelType.getX(), kernelType.getY(), Constants.sobelKernelY);
+		filterimage.set_filterMatrix(kernelAlloc);
+		filterimage.set_gOut(sobelYAlloc);
+		filterimage.invoke_filter();
+		
+		grayscaleAlloc.destroy();
+		
+		Allocation imageGradientAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
+		ScriptC_combineXY combinexy = new ScriptC_combineXY(mRS);
+		combinexy.set_gX(sobelXAlloc);
+		combinexy.set_gY(sobelYAlloc);
+		combinexy.set_gOut(imageGradientAlloc);
+		combinexy.set_gScript(combinexy);
+		combinexy.invoke_filter();
+		
+		imageGradientAlloc.copyTo(bmp);
+        
+		//sobelYAlloc.copyTo(bmp);
+        
+		displayU(bmp);	
+		dismissProgress();
 	}
 
 	/**
