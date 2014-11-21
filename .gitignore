@@ -1,2 +1,9 @@
+*.class
 .metadata
+ImageSegmentation/gen
 ImageSegmentation/bin
+ImageSegmentation/obj
+appcompat_v7/bin
+AmbilWarna/.settings
+AmbilWarna/bin
+AmbilWarna/gen
