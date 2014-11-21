@@ -67,19 +67,6 @@ void root(const uchar4 *v_in, uchar4 *v_out, const void *usrData, uint32_t x, ui
     rsSetElementAt_float(p_x, p_tilde_x / norm_term, x, y);
     rsSetElementAt_float(p_y, p_tilde_y / norm_term, x, y);
     
-    //pixel = clamp(pixel,0.0f,1.0f);
-    //*v_out = rsPackColorTo8888(pixel.rgb);
-    
-    //apixel = rsUnpackColor8888(rsGetElementAt_uchar4(u, x, y));
-    //factor = rsGetElementAt_float(u, x, y);
-    //pixel = apixel.rgb;
-    //pixel.r = 1.0;
-    //pixel.g = 0.0;
-    //pixel.b = 0.0;
-    //pixel = clamp(pixel,0.0f,1.0f);
-    //rsSetElementAt_uchar4(u, rsPackColorTo8888(pixel.rgb), x, y);
-    //*v_out = rsPackColorTo8888(pixel.rgb);
-    
 }
 
 

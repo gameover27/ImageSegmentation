@@ -25,8 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import jp.co.cyberagent.android.gpuimage.GPUImage;
-import jp.co.cyberagent.android.gpuimage.GPUImageSobelEdgeDetection;
 import android.app.AlertDialog;
 import android.app.Fragment;
 import android.app.FragmentManager;
@@ -417,7 +415,7 @@ public class MainActivity extends ActionBarActivity {
 		SharedPreferences sp = PreferenceManager
 				.getDefaultSharedPreferences(getApplicationContext());
 		progress = new ProgressDialog(this);
-		progress.setMax(sp.getInt("pref_iterations", 350) + 1);
+		progress.setMax(sp.getInt("pref_iterations", 350));
 		progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
 		progress.setTitle("Computing");
 		progress.setMessage("Please wait");
@@ -495,21 +493,12 @@ public class MainActivity extends ActionBarActivity {
 		if (bmp.getHeight() == pathbitmapfg.getHeight()
 				&& bmp.getWidth() == pathbitmapbg.getWidth()) {
 
-			// Run Sobel
-			GPUImage gpuI = new GPUImage(this);
-			gpuI.setImage(bmp); // this loads image on the current thread,
-								// should be run in a thread
-			gpuI.setFilter(new GPUImageSobelEdgeDetection());
-			
-
-			Bitmap imageGradient = gpuI.getBitmapWithFilterApplied();
-
 			// Process buffers
 			SharedPreferences sp = PreferenceManager
 					.getDefaultSharedPreferences(getApplicationContext()); 
 			int iterations = sp.getInt("pref_iterations", 350);
 			
-			new SegmentationThread(bmp, imageGradient, pathbitmapfg, pathbitmapbg, iterations).execute();
+			new SegmentationThread(bmp, pathbitmapfg, pathbitmapbg, iterations).execute();
 		}
 	}
 
@@ -1203,7 +1192,6 @@ public class MainActivity extends ActionBarActivity {
 	 */
 	public class SegmentationThread extends AsyncTask<Void, Void, Bitmap> {
 
-		Bitmap imageGradient;
 		Bitmap pathbitmapfg;
 		Bitmap pathbitmapbg;
 		Bitmap bmp;
@@ -1212,9 +1200,8 @@ public class MainActivity extends ActionBarActivity {
 		int width;
 		int iterations;
 
-		public SegmentationThread(Bitmap bmp, Bitmap imageGradient,
+		public SegmentationThread(Bitmap bmp,
 				Bitmap pathbitmapfg, Bitmap pathbitmapbg, int iterations) {
-			this.imageGradient = imageGradient;
 			this.pathbitmapfg = pathbitmapfg;
 			this.pathbitmapbg = pathbitmapbg;
 			this.bmp = bmp;
@@ -1232,6 +1219,12 @@ public class MainActivity extends ActionBarActivity {
 				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 			} else
 				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+			
+			/*
+			 * Calcualte image Gradient using sobel operator
+			 */
+			ImageGradient ig = new ImageGradient(bmp, mRS);
+			Bitmap imageGradient = ig.getBitmapSobelApplied();
 			
 			/*
 	         * Read Scribbles
@@ -1310,11 +1303,11 @@ public class MainActivity extends ActionBarActivity {
 		        segU.invoke_filter();
 		        segP.invoke_filter();
 		        //Projection to constraint
-		        projectionToConstraint.set_gIn(scribbleAllocBG);
-		        projectionToConstraint.set_foreground(0);
-		        projectionToConstraint.invoke_filter();
 		        projectionToConstraint.set_gIn(scribbleAllocFG);
 		        projectionToConstraint.set_foreground(1);
+		        projectionToConstraint.invoke_filter();
+		        projectionToConstraint.set_gIn(scribbleAllocBG);
+		        projectionToConstraint.set_foreground(0);
 		        projectionToConstraint.invoke_filter();
 		        
 		        publishProgress();
@@ -1382,15 +1375,11 @@ public class MainActivity extends ActionBarActivity {
 	        drawcontours.set_gScript(drawcontours);
 	        drawcontours.invoke_filter();
 	        
-	        //incrementProgress();
-	        
 	        image_originalAlloc.copyTo(image_original);
 	        
 	        //Clean bmp Allocation
 	        image_originalAlloc.destroy();
 	        
-	        
-			
 			return image_original;
 		}
 
