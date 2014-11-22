@@ -29,32 +29,22 @@ static int kernelHeight;
 static int imageWidth;
 static int imageHeight;
 
-void root(const uchar4 *v_in, uchar4 *v_out, const void *usrData, uint32_t x, uint32_t y) {
+void root(const uchar4 *v_in, float3 *v_out, const void *usrData, uint32_t x, uint32_t y) {
 
     float4 pixel;
     float kernelValue;
     
     float3 newValue = 0.f;
 
-    for(int i = 0; i < kernelWidth; i++) {
-    	for (int j = 0; j < kernelHeight; j++) {
-    		kernelValue = rsGetElementAt_float(filterMatrix, i, j);
-    		
-    		if (x >= kernelWidth/2 + i && y >= kernelHeight/2 + j && x <= imageWidth - 1 + kernelWidth/2 - i && y <= imageHeight - 1 + kernelHeight/2 - j ) {
-    			pixel = rsUnpackColor8888(rsGetElementAt_uchar4(gIn, x - kernelWidth/2 + i, y - kernelHeight/2 + j));
-    			newValue.r = newValue.r + kernelValue * pixel.r;
-    			newValue.g = newValue.g + kernelValue * pixel.g;
-    			newValue.b = newValue.b + kernelValue * pixel.b;
-    		}
+    for(int i = (x - kernelWidth/2 > 0 ? 0 : kernelWidth/2 - x); i < kernelWidth && x - (kernelWidth/2) + i < imageWidth; i++) {
+    	for (int j = (y - kernelHeight/2 > 0 ? 0 : kernelHeight/2 - y); j < kernelHeight && y - (kernelWidth/2) + j < imageHeight; j++) {
+    		kernelValue = rsGetElementAt_float(filterMatrix, i, j);    		
+    		pixel = rsUnpackColor8888(rsGetElementAt_uchar4(gIn, x - kernelWidth/2 + i, y - kernelHeight/2 + j));
+    		newValue = newValue + kernelValue * pixel.rgb;
     	}
-    }    
-    newValue.r = fabs(newValue.r);
-    newValue.g = fabs(newValue.g);
-    newValue.b = fabs(newValue.b);
-    
-    newValue = clamp(newValue, 0.0f, 1.0f);
-    
-    *v_out = rsPackColorTo8888(newValue);
+    }
+      
+    *v_out = newValue;
     
 }
 

@@ -25,20 +25,15 @@ rs_allocation gOut;
 
 rs_script gScript;
 
-void root(const uchar4 *v_in, uchar4 *v_out, const void *usrData, uint32_t x, uint32_t y) {
+void root(const float3 *v_in, uchar4 *v_out, const void *usrData, uint32_t x, uint32_t y) {
 
-    float4 pixelX = rsUnpackColor8888(*v_in);
-    float4 pixelY = rsUnpackColor8888(rsGetElementAt_uchar4(gY,x,y));
+    float3 pixelX = *v_in;
+    float3 pixelY = rsGetElementAt_float3(gY,x,y);
     
-    float3 result = sqrt(dot(pixelX.rgb, pixelX.rgb) + dot(pixelY.rgb, pixelY.rgb)) ;
-    
-    
-    *v_out = rsPackColorTo8888(clamp(result, 0.0f, 1.0f));
+    float combinedValue = clamp(sqrt(pixelX.r * pixelX.r + pixelY.r * pixelY.r), 0.f, 1.f);
     
     
-    //newValue = clamp(newValue, 0.0f, 1.0f);
-    
-    //*v_out = rsPackColorTo8888(newValue);
+    *v_out = rsPackColorTo8888(combinedValue, combinedValue, combinedValue);
     
 }
 

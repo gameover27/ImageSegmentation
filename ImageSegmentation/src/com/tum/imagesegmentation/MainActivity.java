@@ -371,8 +371,7 @@ public class MainActivity extends ActionBarActivity {
 			}
 
 			if (pathbitmapfg != null && pathbitmapbg != null) {
-				//scheduleProcessing(image_scaled, pathbitmapfg, pathbitmapbg);
-				testFunction(image_scaled);
+				scheduleProcessing(image_scaled, pathbitmapfg, pathbitmapbg);
 			}
 		}
 
@@ -409,7 +408,7 @@ public class MainActivity extends ActionBarActivity {
 		return super.onOptionsItemSelected(item);
 	}
 	
-	public void testFunction(Bitmap bmp) {
+	public Bitmap applySobel(Bitmap bmp) {
 		ScriptC_createGrayscale creategrayscale= new ScriptC_createGrayscale(mRS);
 		Allocation bmpAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
 		Allocation grayscaleAlloc = Allocation.createTyped(mRS, bmpAlloc.getType());
@@ -420,9 +419,11 @@ public class MainActivity extends ActionBarActivity {
 		
 		bmpAlloc.destroy();
 		
-
-		Allocation sobelXAlloc = Allocation.createTyped(mRS, bmpAlloc.getType());
-		Allocation sobelYAlloc = Allocation.createTyped(mRS, bmpAlloc.getType());
+		
+		Type sobelType = new Type.Builder(mRS, Element.F32_3(mRS)).setX(bmp.getWidth()).setY(bmp.getHeight()).create();
+		
+		Allocation sobelXAlloc = Allocation.createTyped(mRS, sobelType);
+		Allocation sobelYAlloc = Allocation.createTyped(mRS, sobelType);
 		
 		Type kernelType = new Type.Builder(mRS, Element.F32(mRS)).setX(Constants.sobelKernelWidth).setY(Constants.sobelKernelHeight).create();
 		Allocation kernelAlloc = Allocation.createTyped(mRS, kernelType);
@@ -450,12 +451,16 @@ public class MainActivity extends ActionBarActivity {
 		combinexy.set_gScript(combinexy);
 		combinexy.invoke_filter();
 		
-		imageGradientAlloc.copyTo(bmp);
-        
-		//sobelYAlloc.copyTo(bmp);
-        
-		displayU(bmp);	
-		dismissProgress();
+		sobelXAlloc.destroy();
+		sobelYAlloc.destroy();
+		kernelAlloc.destroy();
+		
+		Bitmap result = Bitmap.createBitmap(bmp.getWidth(), bmp.getHeight(), Config.ARGB_8888);
+		imageGradientAlloc.copyTo(result);
+		
+		imageGradientAlloc.destroy();
+		
+		return result;
 	}
 
 	/**
@@ -545,21 +550,12 @@ public class MainActivity extends ActionBarActivity {
 		if (bmp.getHeight() == pathbitmapfg.getHeight()
 				&& bmp.getWidth() == pathbitmapbg.getWidth()) {
 
-			// Run Sobel
-			GPUImage gpuI = new GPUImage(this);
-			gpuI.setImage(bmp); // this loads image on the current thread,
-								// should be run in a thread
-			gpuI.setFilter(new GPUImageSobelEdgeDetection());
-			
-
-			Bitmap imageGradient = gpuI.getBitmapWithFilterApplied();
-
 			// Process buffers
 			SharedPreferences sp = PreferenceManager
 					.getDefaultSharedPreferences(getApplicationContext()); 
 			int iterations = sp.getInt("pref_iterations", 350);
 			
-			new SegmentationThread(bmp, imageGradient, pathbitmapfg, pathbitmapbg, iterations).execute();
+			new SegmentationThread(bmp, pathbitmapfg, pathbitmapbg, iterations).execute();
 		}
 	}
 
@@ -1253,7 +1249,6 @@ public class MainActivity extends ActionBarActivity {
 	 */
 	public class SegmentationThread extends AsyncTask<Void, Void, Bitmap> {
 
-		Bitmap imageGradient;
 		Bitmap pathbitmapfg;
 		Bitmap pathbitmapbg;
 		Bitmap bmp;
@@ -1262,9 +1257,8 @@ public class MainActivity extends ActionBarActivity {
 		int width;
 		int iterations;
 
-		public SegmentationThread(Bitmap bmp, Bitmap imageGradient,
+		public SegmentationThread(Bitmap bmp,
 				Bitmap pathbitmapfg, Bitmap pathbitmapbg, int iterations) {
-			this.imageGradient = imageGradient;
 			this.pathbitmapfg = pathbitmapfg;
 			this.pathbitmapbg = pathbitmapbg;
 			this.bmp = bmp;
@@ -1282,6 +1276,11 @@ public class MainActivity extends ActionBarActivity {
 				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 			} else
 				setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+			
+			/*
+			 * Calcualte image Gradient using sobel operator
+			 */
+			Bitmap imageGradient = applySobel(bmp);
 			
 			/*
 	         * Read Scribbles

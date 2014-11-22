@@ -39,8 +39,14 @@ public final class Constants {
 			2.f, -1.f, 0.f, 1.f };
 	public static final float[] sobelKernelY = { 1.f, 2.f, 1.f, 0.f, 0.f, 0.f,
 			-1.f, -2.f, -1.f };
+	public static final float[] scharrKernelX = { -3.f, 0.f, 3.f, -10.f, 0.f,
+		10.f, -3.f, 0.f, 3.f };
+public static final float[] scharrKernelY = { 3.f, 10.f, 3.f, 0.f, 0.f, 0.f,
+		-3.f, -10.f, -3.f };
 	public static int sobelKernelWidth = 3;
 	public static int sobelKernelHeight = 3;
+	public static int scharrKernelWidth = 3;
+	public static int scharrKernelHeight = 3;
 
 	private Constants() {
 		throw new AssertionError();
