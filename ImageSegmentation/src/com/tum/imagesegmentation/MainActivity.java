@@ -25,8 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import jp.co.cyberagent.android.gpuimage.GPUImage;
-import jp.co.cyberagent.android.gpuimage.GPUImageSobelEdgeDetection;
 import android.app.AlertDialog;
 import android.app.Fragment;
 import android.app.FragmentManager;
@@ -407,61 +405,6 @@ public class MainActivity extends ActionBarActivity {
 
 		return super.onOptionsItemSelected(item);
 	}
-	
-	public Bitmap applySobel(Bitmap bmp) {
-		ScriptC_createGrayscale creategrayscale= new ScriptC_createGrayscale(mRS);
-		Allocation bmpAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-		Allocation grayscaleAlloc = Allocation.createTyped(mRS, bmpAlloc.getType());
-		creategrayscale.set_gIn(bmpAlloc);
-		creategrayscale.set_gOut(grayscaleAlloc);
-		creategrayscale.set_gScript(creategrayscale);
-		creategrayscale.invoke_filter();
-		
-		bmpAlloc.destroy();
-		
-		
-		Type sobelType = new Type.Builder(mRS, Element.F32_3(mRS)).setX(bmp.getWidth()).setY(bmp.getHeight()).create();
-		
-		Allocation sobelXAlloc = Allocation.createTyped(mRS, sobelType);
-		Allocation sobelYAlloc = Allocation.createTyped(mRS, sobelType);
-		
-		Type kernelType = new Type.Builder(mRS, Element.F32(mRS)).setX(Constants.sobelKernelWidth).setY(Constants.sobelKernelHeight).create();
-		Allocation kernelAlloc = Allocation.createTyped(mRS, kernelType);
-        kernelAlloc.copy2DRangeFrom(0, 0, kernelType.getX(), kernelType.getY(), Constants.sobelKernelX);
-		
-        ScriptC_filterImage filterimage = new ScriptC_filterImage(mRS);
-        filterimage.set_filterMatrix(kernelAlloc);
-        filterimage.set_gIn(grayscaleAlloc);
-        filterimage.set_gOut(sobelXAlloc);
-        filterimage.set_gScript(filterimage);
-        filterimage.invoke_filter();
-        
-        kernelAlloc.copy2DRangeFrom(0, 0, kernelType.getX(), kernelType.getY(), Constants.sobelKernelY);
-		filterimage.set_filterMatrix(kernelAlloc);
-		filterimage.set_gOut(sobelYAlloc);
-		filterimage.invoke_filter();
-		
-		grayscaleAlloc.destroy();
-		
-		Allocation imageGradientAlloc = Allocation.createFromBitmap(mRS, bmp, Allocation.MipmapControl.MIPMAP_NONE,Allocation.USAGE_SCRIPT);
-		ScriptC_combineXY combinexy = new ScriptC_combineXY(mRS);
-		combinexy.set_gX(sobelXAlloc);
-		combinexy.set_gY(sobelYAlloc);
-		combinexy.set_gOut(imageGradientAlloc);
-		combinexy.set_gScript(combinexy);
-		combinexy.invoke_filter();
-		
-		sobelXAlloc.destroy();
-		sobelYAlloc.destroy();
-		kernelAlloc.destroy();
-		
-		Bitmap result = Bitmap.createBitmap(bmp.getWidth(), bmp.getHeight(), Config.ARGB_8888);
-		imageGradientAlloc.copyTo(result);
-		
-		imageGradientAlloc.destroy();
-		
-		return result;
-	}
 
 	/**
 	 * This method initializes the progress dialog which is updated during
@@ -472,7 +415,7 @@ public class MainActivity extends ActionBarActivity {
 		SharedPreferences sp = PreferenceManager
 				.getDefaultSharedPreferences(getApplicationContext());
 		progress = new ProgressDialog(this);
-		progress.setMax(sp.getInt("pref_iterations", 350) + 1);
+		progress.setMax(sp.getInt("pref_iterations", 350));
 		progress.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
 		progress.setTitle("Computing");
 		progress.setMessage("Please wait");
@@ -1280,7 +1223,8 @@ public class MainActivity extends ActionBarActivity {
 			/*
 			 * Calcualte image Gradient using sobel operator
 			 */
-			Bitmap imageGradient = applySobel(bmp);
+			ImageGradient ig = new ImageGradient(bmp, mRS);
+			Bitmap imageGradient = ig.getBitmapSobelApplied();
 			
 			/*
 	         * Read Scribbles
@@ -1359,11 +1303,11 @@ public class MainActivity extends ActionBarActivity {
 		        segU.invoke_filter();
 		        segP.invoke_filter();
 		        //Projection to constraint
-		        projectionToConstraint.set_gIn(scribbleAllocBG);
-		        projectionToConstraint.set_foreground(0);
-		        projectionToConstraint.invoke_filter();
 		        projectionToConstraint.set_gIn(scribbleAllocFG);
 		        projectionToConstraint.set_foreground(1);
+		        projectionToConstraint.invoke_filter();
+		        projectionToConstraint.set_gIn(scribbleAllocBG);
+		        projectionToConstraint.set_foreground(0);
 		        projectionToConstraint.invoke_filter();
 		        
 		        publishProgress();
@@ -1431,15 +1375,11 @@ public class MainActivity extends ActionBarActivity {
 	        drawcontours.set_gScript(drawcontours);
 	        drawcontours.invoke_filter();
 	        
-	        //incrementProgress();
-	        
 	        image_originalAlloc.copyTo(image_original);
 	        
 	        //Clean bmp Allocation
 	        image_originalAlloc.destroy();
 	        
-	        
-			
 			return image_original;
 		}
 
